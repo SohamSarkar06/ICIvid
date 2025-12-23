@@ -18,7 +18,7 @@ import {
   where
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// ================= FIREBASE =================
+// ================= FIREBASE CONFIG =================
 const firebaseConfig = {
   apiKey: "AIzaSyBjPo05IXrOkzUVXsnx8wNaJwiRsXE2Onk",
   authDomain: "icivid.firebaseapp.com",
@@ -26,6 +26,7 @@ const firebaseConfig = {
   appId: "1:2684424094:web:2d63b2cb5cf98615b8108f"
 };
 
+// ================= INIT =================
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -41,11 +42,18 @@ const declineBtn = document.getElementById("decline");
 
 // ================= AUTH =================
 onAuthStateChanged(auth, async (user) => {
-  if (!user) return location.href = "index.html";
+  if (!user) {
+    location.href = "index.html";
+    return;
+  }
 
+  // Show username
   const snap = await getDoc(doc(db, "users", user.uid));
-  welcomeUser.textContent = `Hi, ${snap.data().username} 👋`;
+  if (snap.exists()) {
+    welcomeUser.textContent = `Hi, ${snap.data().username} 👋`;
+  }
 
+  // Start listening for incoming calls
   listenForIncomingCalls(user.uid);
 });
 
@@ -55,7 +63,7 @@ logoutBtn.onclick = async () => {
   location.href = "index.html";
 };
 
-// ================= SEARCH =================
+// ================= SEARCH USERS =================
 searchInput.addEventListener("input", async () => {
   const value = searchInput.value.trim().toLowerCase();
   resultsDiv.innerHTML = "";
@@ -65,55 +73,70 @@ searchInput.addEventListener("input", async () => {
 
   snap.forEach(d => {
     if (d.id === auth.currentUser.uid) return;
+
     const u = d.data();
-    if (u.username?.toLowerCase().includes(value)) {
+    if (!u.username || !u.peerId) return;
+
+    if (u.username.toLowerCase().includes(value)) {
       resultsDiv.innerHTML += `
         <div class="user-row">
           <span>${u.username}</span>
-          <button onclick="startCall('${u.peerId}')">Call</button>
+          <button onclick="startCall('${d.id}', '${u.peerId}')">
+            Call
+          </button>
         </div>
       `;
     }
   });
 });
 
-// ================= CALL REQUEST =================
-window.startCall = async (peerId) => {
+// ================= SEND CALL REQUEST =================
+window.startCall = async (receiverUid, receiverPeerId) => {
   await addDoc(collection(db, "callRequests"), {
-    from: auth.currentUser.uid,
-    toPeer: peerId,
+    fromUid: auth.currentUser.uid,
+    fromPeer: auth.currentUser.uid,   // peerId = uid
+    toUid: receiverUid,
+    toPeer: receiverPeerId,
     status: "pending",
     createdAt: Date.now()
   });
 
-  // Caller waits in call page
-  location.href = `call.html?peer=${peerId}`;
+  // Caller immediately joins call page
+  location.href = `call.html?peer=${receiverPeerId}`;
 };
 
-// ================= INCOMING =================
-function listenForIncomingCalls(uid) {
+// ================= INCOMING CALL LISTENER =================
+function listenForIncomingCalls(myUid) {
   const q = query(
     collection(db, "callRequests"),
-    where("toPeer", "==", uid),
+    where("toUid", "==", myUid),
     where("status", "==", "pending")
   );
 
   onSnapshot(q, snap => {
-    snap.forEach(d => showIncoming(d.id, d.data()));
+    snap.forEach(d => {
+      showIncoming(d.id, d.data());
+    });
   });
 }
 
-// ================= MODAL =================
-function showIncoming(id, data) {
+// ================= INCOMING CALL UI =================
+function showIncoming(requestId, data) {
   incomingModal.classList.remove("hidden");
 
   acceptBtn.onclick = async () => {
-    await updateDoc(doc(db, "callRequests", id), { status: "accepted" });
-    location.href = `call.html?peer=${data.from}`;
+    await updateDoc(doc(db, "callRequests", requestId), {
+      status: "accepted"
+    });
+
+    // Receiver joins call using caller peerId
+    location.href = `call.html?peer=${data.fromPeer}`;
   };
 
   declineBtn.onclick = async () => {
-    await updateDoc(doc(db, "callRequests", id), { status: "declined" });
+    await updateDoc(doc(db, "callRequests", requestId), {
+      status: "declined"
+    });
     incomingModal.classList.add("hidden");
   };
 }
