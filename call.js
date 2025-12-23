@@ -1,9 +1,6 @@
 // ================= IMPORTS =================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import {
-  getAuth,
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import {
   getFirestore,
   doc,
@@ -57,36 +54,41 @@ async function startCall(uid) {
   const snap = await getDoc(callRef);
   const callData = snap.data();
 
-  // ================= WEBRTC (TURN FIX) =================
+  // ================= WEBRTC (TURN + STUN) =================
   const pc = new RTCPeerConnection({
     iceServers: [
       { urls: "stun:stun.l.google.com:19302" },
       {
-        urls: "turn:openrelay.metered.ca:80",
-        username: "openrelayproject",
-        credential: "openrelayproject"
+        urls: "turn:relay.metered.ca:80",
+        username: "YOUR_METERED_USERNAME",      // replace with your TURN creds
+        credential: "YOUR_METERED_CREDENTIAL"
       },
       {
-        urls: "turn:openrelay.metered.ca:443",
-        username: "openrelayproject",
-        credential: "openrelayproject"
+        urls: "turn:relay.metered.ca:443",
+        username: "YOUR_METERED_USERNAME",
+        credential: "YOUR_METERED_CREDENTIAL"
       }
     ]
   });
 
-  // 🔑 REQUIRED
+  // ===== SHOW ICE CONNECTION STATE FOR DEBUGGING =====
+  pc.oniceconnectionstatechange = () => {
+    console.log("ICE state:", pc.iceConnectionState);
+  };
+
+  // ===== ADD EXPLICIT TRANSCEIVERS =====
   pc.addTransceiver("video", { direction: "sendrecv" });
   pc.addTransceiver("audio", { direction: "sendrecv" });
 
-  // ================= MEDIA =================
+  // ========== LOCAL MEDIA ==========
   const localStream = await navigator.mediaDevices.getUserMedia({
     video: true,
     audio: true
   });
-
   localVideo.srcObject = localStream;
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
+  // ========== REMOTE STREAM ==========
   const remoteStream = new MediaStream();
   remoteVideo.srcObject = remoteStream;
 
@@ -98,7 +100,7 @@ async function startCall(uid) {
     });
   };
 
-  // ================= ICE =================
+  // ========== ICE CANDIDATES ==========
   pc.onicecandidate = e => {
     if (!e.candidate) return;
     addDoc(
@@ -112,7 +114,7 @@ async function startCall(uid) {
     );
   };
 
-  // ================= SIGNALING =================
+  // ========== SIGNALING ==========
   if (uid === callData.caller) {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -127,9 +129,7 @@ async function startCall(uid) {
 
     onSnapshot(
       collection(db, "calls", callId, "iceReceiver"),
-      s => s.docChanges().forEach(c =>
-        pc.addIceCandidate(c.doc.data())
-      )
+      s => s.docChanges().forEach(c => pc.addIceCandidate(c.doc.data()))
     );
   } else {
     onSnapshot(callRef, async s => {
@@ -144,9 +144,7 @@ async function startCall(uid) {
 
     onSnapshot(
       collection(db, "calls", callId, "iceCaller"),
-      s => s.docChanges().forEach(c =>
-        pc.addIceCandidate(c.doc.data())
-      )
+      s => s.docChanges().forEach(c => pc.addIceCandidate(c.doc.data()))
     );
   }
 
@@ -156,36 +154,27 @@ async function startCall(uid) {
 
   muteBtn.onclick = () => {
     audioTrack.enabled = !audioTrack.enabled;
-    muteBtn.textContent = audioTrack.enabled ? "🎤" : "🔇";
   };
 
   videoBtn.onclick = () => {
     videoTrack.enabled = !videoTrack.enabled;
-    videoBtn.textContent = videoTrack.enabled ? "🎥" : "🚫";
   };
 
   // ================= SCREEN SHARE =================
   let screenStream = null;
-  const sender = pc.getSenders().find(s => s.track?.kind === "video");
+  const videoSender = pc.getSenders().find(s => s.track?.kind === "video");
 
   screenBtn.onclick = async () => {
     if (!screenStream) {
       screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      sender.replaceTrack(screenStream.getVideoTracks()[0]);
+      videoSender.replaceTrack(screenStream.getVideoTracks()[0]);
       localVideo.srcObject = screenStream;
-
-      screenStream.getVideoTracks()[0].onended = stopScreen;
-    } else {
-      stopScreen();
+      screenStream.getVideoTracks()[0].onended = () => {
+        videoSender.replaceTrack(videoTrack);
+        localVideo.srcObject = localStream;
+      };
     }
   };
-
-  function stopScreen() {
-    sender.replaceTrack(videoTrack);
-    localVideo.srcObject = localStream;
-    screenStream.getTracks().forEach(t => t.stop());
-    screenStream = null;
-  }
 
   // ================= CHAT =================
   const chatQuery = query(
@@ -215,7 +204,6 @@ async function startCall(uid) {
     });
   });
 
-  // ================= END =================
   endBtn.onclick = async () => {
     pc.close();
     localStream.getTracks().forEach(t => t.stop());
