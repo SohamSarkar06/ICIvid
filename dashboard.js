@@ -12,6 +12,7 @@ import {
   addDoc,
   doc,
   getDoc,
+  setDoc,
   updateDoc,
   onSnapshot,
   query,
@@ -40,7 +41,7 @@ const incomingModal = document.getElementById("incomingCall");
 const acceptBtn = document.getElementById("accept");
 const declineBtn = document.getElementById("decline");
 
-// ================= AUTH =================
+// ================= AUTH (SINGLE SOURCE OF TRUTH) =================
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     location.href = "index.html";
@@ -49,19 +50,19 @@ onAuthStateChanged(auth, async (user) => {
 
   // Show username
   const snap = await getDoc(doc(db, "users", user.uid));
-  if (snap.exists()) {
+  if (snap.exists() && snap.data().username) {
     welcomeUser.textContent = `Hi, ${snap.data().username} 👋`;
   }
 
-  // Start listening for incoming calls
+  // Listen for incoming calls AFTER auth is ready
   listenForIncomingCalls(user.uid);
 });
 
 // ================= LOGOUT =================
-logoutBtn.onclick = async () => {
+logoutBtn.addEventListener("click", async () => {
   await signOut(auth);
   location.href = "index.html";
-};
+});
 
 // ================= SEARCH USERS =================
 searchInput.addEventListener("input", async () => {
@@ -71,19 +72,16 @@ searchInput.addEventListener("input", async () => {
 
   const snap = await getDocs(collection(db, "users"));
 
-  snap.forEach(d => {
-    if (d.id === auth.currentUser.uid) return;
+  snap.forEach(docu => {
+    const user = docu.data();
+    if (!user.username) return;
+    if (docu.id === auth.currentUser.uid) return;
 
-    const u = d.data();
-    if (!u.username || !u.peerId) return;
-
-    if (u.username.toLowerCase().includes(value)) {
+    if (user.username.toLowerCase().includes(value)) {
       resultsDiv.innerHTML += `
         <div class="user-row">
-          <span>${u.username}</span>
-          <button onclick="startCall('${d.id}', '${u.peerId}')">
-            Call
-          </button>
+          <span>${user.username}</span>
+          <button onclick="startCall('${docu.id}')">Call</button>
         </div>
       `;
     }
@@ -91,50 +89,63 @@ searchInput.addEventListener("input", async () => {
 });
 
 // ================= SEND CALL REQUEST =================
-window.startCall = async (receiverUid, receiverPeerId) => {
-  await addDoc(collection(db, "callRequests"), {
-    fromUid: auth.currentUser.uid,
-    fromPeer: auth.currentUser.uid,   // peerId = uid
-    toUid: receiverUid,
-    toPeer: receiverPeerId,
+window.startCall = async (receiverId) => {
+  const now = Date.now();
+
+  const req = await addDoc(collection(db, "callRequests"), {
+    from: auth.currentUser.uid,
+    to: receiverId,
     status: "pending",
-    createdAt: Date.now()
+    createdAt: now,
+    expiresAt: now + 5 * 60 * 1000
   });
 
-  // Caller immediately joins call page
-  location.href = `call.html?peer=${receiverPeerId}`;
+  location.href = `call-wait.html?req=${req.id}`;
 };
 
 // ================= INCOMING CALL LISTENER =================
-function listenForIncomingCalls(myUid) {
+function listenForIncomingCalls(uid) {
   const q = query(
     collection(db, "callRequests"),
-    where("toUid", "==", myUid),
+    where("to", "==", uid),
     where("status", "==", "pending")
   );
 
   onSnapshot(q, snap => {
-    snap.forEach(d => {
-      showIncoming(d.id, d.data());
+    snap.forEach(docu => {
+      showIncoming(docu.id, docu.data());
     });
   });
 }
 
-// ================= INCOMING CALL UI =================
-function showIncoming(requestId, data) {
+// ================= INCOMING CALL UI (FIXED) =================
+function showIncoming(callId, data) {
   incomingModal.classList.remove("hidden");
 
   acceptBtn.onclick = async () => {
-    await updateDoc(doc(db, "callRequests", requestId), {
-      status: "accepted"
-    });
+    try {
+      // 1️⃣ Accept request
+      await updateDoc(doc(db, "callRequests", callId), {
+        status: "accepted"
+      });
 
-    // Receiver joins call using caller peerId
-    location.href = `call.html?peer=${data.fromPeer}`;
+      // 2️⃣ Create signaling document
+      await setDoc(doc(db, "calls", callId), {
+        caller: data.from,
+        receiver: auth.currentUser.uid,
+        createdAt: Date.now()
+      });
+
+      // 3️⃣ Move receiver into call
+      location.href = `call.html?call=${callId}`;
+    } catch (err) {
+      console.error("Accept failed:", err);
+      alert("Failed to accept call");
+    }
   };
 
   declineBtn.onclick = async () => {
-    await updateDoc(doc(db, "callRequests", requestId), {
+    await updateDoc(doc(db, "callRequests", callId), {
       status: "declined"
     });
     incomingModal.classList.add("hidden");
