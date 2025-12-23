@@ -90,25 +90,22 @@ searchInput.addEventListener("input", async () => {
 
 // ================= SEND CALL REQUEST =================
 window.startCall = async (receiverId) => {
-  const callRef = await addDoc(collection(db, "calls"), {
-    caller: auth.currentUser.uid,
-    receiver: receiverId,
-    createdAt: Date.now(),
-    status: "ringing"
-  });
+  const receiverSnap = await getDoc(doc(db, "users", receiverId));
+  const receiverData = receiverSnap.data();
 
-  // Optional: create callRequests if you want ringing UI
-  await addDoc(collection(db, "callRequests"), {
-    callId: callRef.id,
+  const callInfo = {
     from: auth.currentUser.uid,
     to: receiverId,
-    status: "pending",
-    createdAt: Date.now()
-  });
+    peerId: receiverData.peerId
+  };
 
-  // 🔑 Caller goes to call page IMMEDIATELY
-  location.href = `call.html?call=${callRef.id}`;
+  // Save call request if you want popup on receiver
+  await addDoc(collection(db, "callRequests"), callInfo);
+
+  // Redirect to call page with peerId
+  location.href = `call.html?peer=${receiverData.peerId}`;
 };
+
 
 
 // ================= INCOMING CALL LISTENER =================
