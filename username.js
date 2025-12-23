@@ -10,6 +10,7 @@ import {
   setDoc
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+// ================= FIREBASE CONFIG =================
 const firebaseConfig = {
   apiKey: "AIzaSyBjPo05IXrOkzUVXsnx8wNaJwiRsXE2Onk",
   authDomain: "icivid.firebaseapp.com",
@@ -17,22 +18,24 @@ const firebaseConfig = {
   appId: "1:2684424094:web:2d63b2cb5cf98615b8108f"
 };
 
+// ================= INIT =================
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// ================= DOM =================
 const usernameInput = document.getElementById("username");
 const saveBtn = document.getElementById("saveUsername");
 const error = document.getElementById("error");
 
-// 🔒 Protect page
+// ================= AUTH PROTECTION =================
 onAuthStateChanged(auth, (user) => {
   if (!user || !user.emailVerified) {
     location.href = "index.html";
   }
 });
 
-// ✅ Save username
+// ================= SAVE USERNAME =================
 saveBtn.addEventListener("click", async () => {
   const uname = usernameInput.value.trim().toLowerCase();
 
@@ -42,7 +45,7 @@ saveBtn.addEventListener("click", async () => {
   }
 
   try {
-    // 🔍 Check uniqueness
+    // 🔍 Check username uniqueness
     const taken = await getDoc(doc(db, "usernames", uname));
     if (taken.exists()) {
       error.textContent = "Username already taken";
@@ -54,17 +57,22 @@ saveBtn.addEventListener("click", async () => {
     // ✅ Reserve username
     await setDoc(doc(db, "usernames", uname), { uid });
 
-    // ✅ Save to user profile
+    // ✅ Save user profile WITH peerId (IMPORTANT)
     await setDoc(
       doc(db, "users", uid),
-      { username: uname },
+      {
+        username: uname,
+        peerId: uid,          // 🔥 PeerJS will use UID as peerId
+        updatedAt: Date.now()
+      },
       { merge: true }
     );
 
-    // ✅ FORCE REDIRECT (CRITICAL)
+    // ✅ Redirect to dashboard
     location.href = "dashboard.html";
 
   } catch (err) {
-    error.textContent = err.message;
+    console.error(err);
+    error.textContent = err.message || "Something went wrong";
   }
 });
