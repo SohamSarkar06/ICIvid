@@ -8,48 +8,56 @@ import {
   collection,
   addDoc
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import {
-  getAuth
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
-/* ================= Firebase ================= */
 
 const firebaseConfig = {
-  // 🔴 keep your existing config
+  // your config
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app);
 
-/* ================= Video Elements ================= */
+/* ---------------- Video ---------------- */
 
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 
-/* ================= Peer Connection ================= */
+/* ---------------- Peer ---------------- */
 
 const pc = new RTCPeerConnection({
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
 });
 
-/* ================= Remote Stream (FIX) ================= */
+/* 🔍 LOG EVERYTHING */
+pc.oniceconnectionstatechange = () =>
+  console.log("ICE STATE:", pc.iceConnectionState);
+
+pc.onconnectionstatechange = () =>
+  console.log("PC STATE:", pc.connectionState);
+
+pc.onsignalingstatechange = () =>
+  console.log("SIGNAL STATE:", pc.signalingState);
+
+/* ---------------- Remote Stream ---------------- */
 
 const remoteStream = new MediaStream();
 remoteVideo.srcObject = remoteStream;
 
 pc.ontrack = (event) => {
+  console.log("🔥 ONTRACK FIRED", event.streams);
   event.streams[0].getTracks().forEach(track => {
+    console.log("➡️ Remote track:", track.kind);
     remoteStream.addTrack(track);
   });
 };
 
-/* ================= Local Media ================= */
+/* ---------------- Local Media ---------------- */
 
 const localStream = await navigator.mediaDevices.getUserMedia({
   video: true,
   audio: true
 });
+
+console.log("🎥 Local tracks:", localStream.getTracks());
 
 localVideo.srcObject = localStream;
 localVideo.muted = true;
@@ -58,7 +66,7 @@ localStream.getTracks().forEach(track => {
   pc.addTrack(track, localStream);
 });
 
-/* ================= Signaling ================= */
+/* ---------------- Signaling ---------------- */
 
 const params = new URLSearchParams(window.location.search);
 const reqId = params.get("req");
@@ -72,10 +80,12 @@ const callData = callSnap.data();
 
 const isCaller = !callData?.offer;
 
-/* ================= ICE ================= */
+/* ---------------- ICE ---------------- */
 
 pc.onicecandidate = async (event) => {
   if (!event.candidate) return;
+
+  console.log("📡 ICE candidate generated");
 
   await addDoc(
     isCaller ? offerCandidates : answerCandidates,
@@ -83,10 +93,10 @@ pc.onicecandidate = async (event) => {
   );
 };
 
-/* 🔴 Listen for ICE from BOTH sides */
 onSnapshot(offerCandidates, snapshot => {
   snapshot.docChanges().forEach(change => {
     if (change.type === "added") {
+      console.log("⬅️ ICE from offer side");
       pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
     }
   });
@@ -95,16 +105,18 @@ onSnapshot(offerCandidates, snapshot => {
 onSnapshot(answerCandidates, snapshot => {
   snapshot.docChanges().forEach(change => {
     if (change.type === "added") {
+      console.log("⬅️ ICE from answer side");
       pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
     }
   });
 });
 
-/* ================= Answerer ================= */
+/* ---------------- Answerer ---------------- */
 
 if (callData?.offer) {
-  await pc.setRemoteDescription(callData.offer);
+  console.log("📞 Answerer");
 
+  await pc.setRemoteDescription(callData.offer);
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
 
@@ -116,9 +128,11 @@ if (callData?.offer) {
   });
 }
 
-/* ================= Caller ================= */
+/* ---------------- Caller ---------------- */
 
 if (!callData?.offer) {
+  console.log("📞 Caller");
+
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
