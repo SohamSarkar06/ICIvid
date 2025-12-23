@@ -1,6 +1,4 @@
-// ================= IMPORTS =================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import {
   getFirestore,
   doc,
@@ -8,88 +6,34 @@ import {
   updateDoc,
   onSnapshot,
   collection,
-  addDoc,
-  serverTimestamp,
-  query,
-  orderBy
+  addDoc
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// ================= FIREBASE =================
 const firebaseConfig = {
-  apiKey: "AIzaSyBjPo05IXrOkzUVXsnx8wNaJwiRsXE2Onk",
-  authDomain: "icivid.firebaseapp.com",
-  projectId: "icivid",
-  appId: "1:2684424094:web:2d63b2cb5cf98615b8108f"
+  // your existing config
 };
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ================= DOM =================
+/* ================= VIDEO ELEMENTS ================= */
+
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
-const muteBtn = document.getElementById("muteBtn");
-const videoBtn = document.getElementById("videoBtn");
-const screenBtn = document.getElementById("screenBtn");
-const endBtn = document.getElementById("endBtn");
-const sendBtn = document.getElementById("sendBtn");
-const messages = document.getElementById("messages");
-const messageInput = document.getElementById("messageInput");
 
-// ================= AUTH =================
-onAuthStateChanged(auth, async (user) => {
-  if (!user) {
-    location.href = "index.html";
-    return;
-  }
-  startCall(user.uid);
+/* ================= PEER CONNECTION ================= */
+
+const pc = new RTCPeerConnection({
+  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
 });
 
-// ================= MAIN =================
-async function startCall(uid) {
-  const callId = new URLSearchParams(location.search).get("call");
-  const callRef = doc(db, "calls", callId);
+/* 🔴 IMPORTANT: Explicit receive transceivers */
+pc.addTransceiver("video", { direction: "sendrecv" });
+pc.addTransceiver("audio", { direction: "sendrecv" });
 
-  const snap = await getDoc(callRef);
-  const callData = snap.data();
+/* ================= REMOTE STREAM (FIX #1) ================= */
 
-  // ================= WEBRTC (TURN + STUN) =================
-  const pc = new RTCPeerConnection({
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      {
-        urls: "turn:relay.metered.ca:80",
-        username: "YOUR_METERED_USERNAME",      // replace with your TURN creds
-        credential: "YOUR_METERED_CREDENTIAL"
-      },
-      {
-        urls: "turn:relay.metered.ca:443",
-        username: "YOUR_METERED_USERNAME",
-        credential: "YOUR_METERED_CREDENTIAL"
-      }
-    ]
-  });
-
-  // ===== SHOW ICE CONNECTION STATE FOR DEBUGGING =====
-  pc.oniceconnectionstatechange = () => {
-    console.log("ICE state:", pc.iceConnectionState);
-  };
-
-  // ===== ADD EXPLICIT TRANSCEIVERS =====
-  pc.addTransceiver("video", { direction: "sendrecv" });
-  pc.addTransceiver("audio", { direction: "sendrecv" });
-
-  // ========== LOCAL MEDIA ==========
-  const localStream = await navigator.mediaDevices.getUserMedia({
-    video: true,
-    audio: true
-  });
-  localVideo.srcObject = localStream;
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-
-  // ========== REMOTE STREAM ==========
-  const remoteStream = new MediaStream();
+const remoteStream = new MediaStream();
 remoteVideo.srcObject = remoteStream;
 
 pc.ontrack = (event) => {
@@ -98,123 +42,93 @@ pc.ontrack = (event) => {
   });
 };
 
+/* ================= LOCAL MEDIA ================= */
 
-  // ========== ICE CANDIDATES ==========
-  let isCaller = false;
+const localStream = await navigator.mediaDevices.getUserMedia({
+  video: true,
+  audio: true
+});
+
+localVideo.srcObject = localStream;
+localVideo.muted = true;
+
+localStream.getTracks().forEach(track => {
+  pc.addTrack(track, localStream);
+});
+
+/* ================= SIGNALING ================= */
+
+const params = new URLSearchParams(window.location.search);
+const reqId = params.get("req");
+
+const callRef = doc(db, "callRequests", reqId);
+const offerCandidates = collection(callRef, "offerCandidates");
+const answerCandidates = collection(callRef, "answerCandidates");
 
 const callSnap = await getDoc(callRef);
 const callData = callSnap.data();
 
-if (!callData?.offer) {
-  isCaller = true;
-}
+const isCaller = !callData?.offer;
 
+/* ================= ICE (FIX #2) ================= */
 
 pc.onicecandidate = async (event) => {
   if (!event.candidate) return;
 
-  if (isCaller) {
-    await addDoc(offerCandidates, event.candidate.toJSON());
-  } else {
-    await addDoc(answerCandidates, event.candidate.toJSON());
-  }
+  await addDoc(
+    isCaller ? offerCandidates : answerCandidates,
+    event.candidate.toJSON()
+  );
 };
 
+/* ================= ANSWERER ================= */
 
-  // ========== SIGNALING ==========
-  if (uid === callData.caller) {
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    await updateDoc(callRef, { offer });
+if (callData?.offer) {
+  await pc.setRemoteDescription(callData.offer);
 
-    onSnapshot(callRef, s => {
-      const d = s.data();
-      if (d.answer && !pc.currentRemoteDescription) {
-        pc.setRemoteDescription(d.answer);
-      }
-    });
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
 
-    onSnapshot(
-      collection(db, "calls", callId, "iceReceiver"),
-      s => s.docChanges().forEach(c => pc.addIceCandidate(c.doc.data()))
-    );
-  } else {
-    onSnapshot(callRef, async s => {
-      const d = s.data();
-      if (d.offer && !pc.currentRemoteDescription) {
-        await pc.setRemoteDescription(d.offer);
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        await updateDoc(callRef, { answer });
-      }
-    });
-
-    onSnapshot(
-      collection(db, "calls", callId, "iceCaller"),
-      s => s.docChanges().forEach(c => pc.addIceCandidate(c.doc.data()))
-    );
-  }
-
-  // ================= CONTROLS =================
-  const audioTrack = localStream.getAudioTracks()[0];
-  const videoTrack = localStream.getVideoTracks()[0];
-
-  muteBtn.onclick = () => {
-    audioTrack.enabled = !audioTrack.enabled;
-  };
-
-  videoBtn.onclick = () => {
-    videoTrack.enabled = !videoTrack.enabled;
-  };
-
-  // ================= SCREEN SHARE =================
-  let screenStream = null;
-  const videoSender = pc.getSenders().find(s => s.track?.kind === "video");
-
-  screenBtn.onclick = async () => {
-    if (!screenStream) {
-      screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      videoSender.replaceTrack(screenStream.getVideoTracks()[0]);
-      localVideo.srcObject = screenStream;
-      screenStream.getVideoTracks()[0].onended = () => {
-        videoSender.replaceTrack(videoTrack);
-        localVideo.srcObject = localStream;
-      };
+  await updateDoc(callRef, {
+    answer: {
+      type: answer.type,
+      sdp: answer.sdp
     }
-  };
-
-  // ================= CHAT =================
-  const chatQuery = query(
-    collection(db, "chats", callId, "messages"),
-    orderBy("createdAt")
-  );
-
-  sendBtn.onclick = async () => {
-    if (!messageInput.value.trim()) return;
-    await addDoc(collection(db, "chats", callId, "messages"), {
-      text: messageInput.value,
-      sender: uid,
-      createdAt: serverTimestamp()
-    });
-    messageInput.value = "";
-  };
-
-  onSnapshot(chatQuery, snap => {
-    snap.docChanges().forEach(c => {
-      if (c.type !== "added") return;
-      const m = c.doc.data();
-      const div = document.createElement("div");
-      div.className = `message ${m.sender === uid ? "me" : "other"}`;
-      div.textContent = m.text;
-      messages.appendChild(div);
-      messages.scrollTop = messages.scrollHeight;
-    });
   });
 
-  endBtn.onclick = async () => {
-    pc.close();
-    localStream.getTracks().forEach(t => t.stop());
-    await updateDoc(callRef, { status: "ended" });
-    location.href = "dashboard.html";
-  };
+  onSnapshot(offerCandidates, snapshot => {
+    snapshot.docChanges().forEach(change => {
+      if (change.type === "added") {
+        pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+      }
+    });
+  });
 }
+
+/* ================= CALLER ================= */
+
+if (!callData?.offer) {
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  await updateDoc(callRef, {
+    offer: {
+      type: offer.type,
+      sdp: offer.sdp
+    }
+  });
+
+  onSnapshot(answerCandidates, snapshot => {
+    snapshot.docChanges().forEach(change => {
+      if (change.type === "added") {
+        pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+      }
+    });
+  });
+}
+
+/* ================= FORCE PLAY (FIX #3) ================= */
+
+remoteVideo.onloadedmetadata = () => {
+  remoteVideo.play().catch(() => {});
+};
