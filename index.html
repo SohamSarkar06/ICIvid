@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ICIVID • Login</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="auth-card">
+  <div class="logo">
+    <img src="assets/logo.svg" alt="ICIVID">
+  </div>
+
+  <h2>Welcome to ICIVID</h2>
+
+  <input id="email" placeholder="Email">
+  <div style="position:relative;">
+  <input id="password" type="password" placeholder="Password">
+  <span id="togglePass"
+        style="position:absolute; right:12px; top:50%;
+        transform:translateY(-50%); cursor:pointer;">
+    👁️
+  </span>
+</div>
+
+<p id="forgotPass"
+   style="cursor:pointer; font-size:13px; opacity:0.8; text-align:right;">
+  Forgot password?
+</p>
+
+<button id="signup">Create Account</button>
+<button id="login" class="secondary">Login</button><script type="module" src="index.js"></script>
+</body>
+</html>
