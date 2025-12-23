@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard • ICIVID</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="auth-card">
+
+  <!-- LOGO -->
+  <div class="logo">
+    <img src="assets/logo.svg" alt="ICIVID">
+  </div>
+
+  <!-- WELCOME USER -->
+  <h3 id="welcomeUser" style="text-align:center; margin-bottom:12px;"></h3>
+
+  <!-- LOGOUT -->
+  <button id="logoutBtn" class="secondary">Logout</button>
+
+  <!-- SEARCH USERS -->
+  <h3 style="margin-top:20px;">Search Users</h3>
+
+  <input
+    id="searchUser"
+    placeholder="Search by username"
+    autocomplete="off"
+  >
+
+  <div id="results"></div>
+
+</div>
+
+<!-- INCOMING CALL MODAL -->
+<div id="incomingCall" class="modal hidden">
+  <div class="modal-card">
+    <h3>Incoming Call</h3>
+    <div class="modal-actions">
+      <button id="accept" class="primary">Accept</button>
+      <button id="decline" class="secondary">Decline</button>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD LOGIC -->
+<script type="module" src="dashboard.js"></script>
+
+</body>
+</html>
