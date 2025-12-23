@@ -90,18 +90,26 @@ searchInput.addEventListener("input", async () => {
 
 // ================= SEND CALL REQUEST =================
 window.startCall = async (receiverId) => {
-  const now = Date.now();
+  const callRef = await addDoc(collection(db, "calls"), {
+    caller: auth.currentUser.uid,
+    receiver: receiverId,
+    createdAt: Date.now(),
+    status: "ringing"
+  });
 
-  const req = await addDoc(collection(db, "callRequests"), {
+  // Optional: create callRequests if you want ringing UI
+  await addDoc(collection(db, "callRequests"), {
+    callId: callRef.id,
     from: auth.currentUser.uid,
     to: receiverId,
     status: "pending",
-    createdAt: now,
-    expiresAt: now + 5 * 60 * 1000
+    createdAt: Date.now()
   });
 
-  location.href = `call-wait.html?req=${req.id}`;
+  // 🔑 Caller goes to call page IMMEDIATELY
+  location.href = `call.html?call=${callRef.id}`;
 };
+
 
 // ================= INCOMING CALL LISTENER =================
 function listenForIncomingCalls(uid) {
