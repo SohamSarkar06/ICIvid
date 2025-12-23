@@ -90,18 +90,50 @@ searchInput.addEventListener("input", async () => {
 
 // ================= SEND CALL REQUEST =================
 window.startCall = async (receiverId) => {
-  const now = Date.now();
+  try {
+    const now = Date.now();
 
-  const req = await addDoc(collection(db, "callRequests"), {
-    from: auth.currentUser.uid,
-    to: receiverId,
-    status: "pending",
-    createdAt: now,
-    expiresAt: now + 5 * 60 * 1000
-  });
+    // 1️⃣ Create Daily room
+    const res = await fetch("https://api.daily.co/v1/rooms", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer dda0f5a0a6fa21041bfbf25ab2067d03a797db5c0cbae659ff9e4e300c30267d"
+      },
+      body: JSON.stringify({
+        properties: {
+          enable_screenshare: true,
+          start_audio_off: false,
+          start_video_off: false
+        }
+      })
+    });
 
-  location.href = `call-wait.html?req=${req.id}`;
+    const room = await res.json();
+
+    if (!room.url) {
+      throw new Error("Failed to create Daily room");
+    }
+
+    // 2️⃣ Create call request (store room URL)
+    const req = await addDoc(collection(db, "callRequests"), {
+      from: auth.currentUser.uid,
+      to: receiverId,
+      roomUrl: room.url,          // 🔥 IMPORTANT
+      status: "pending",
+      createdAt: now,
+      expiresAt: now + 5 * 60 * 1000
+    });
+
+    // 3️⃣ Redirect caller to waiting screen
+    location.href = `call-wait.html?req=${req.id}`;
+
+  } catch (err) {
+    console.error("Start call failed:", err);
+    alert("Unable to start call. Try again.");
+  }
 };
+
 
 // ================= INCOMING CALL LISTENER =================
 function listenForIncomingCalls(uid) {
