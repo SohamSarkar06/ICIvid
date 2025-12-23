@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>ICIVID • Call</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -11,10 +12,8 @@
   <!-- VIDEO AREA -->
   <div class="video-area">
     <video id="remoteVideo" autoplay playsinline></video>
-
     <video id="localVideo" autoplay muted playsinline class="local-video"></video>
 
-    <!-- VIDEO CONTROLS -->
     <div class="video-controls">
       <button id="muteBtn">🎤</button>
       <button id="videoBtn">🎥</button>
@@ -26,7 +25,6 @@
   <!-- CHAT -->
   <div class="chat-panel">
     <div id="messages" class="messages"></div>
-
     <div class="chat-input">
       <input id="messageInput" placeholder="Type a message…" />
       <button id="sendBtn">Send</button>
