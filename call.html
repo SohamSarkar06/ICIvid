@@ -4,12 +4,13 @@
   <title>ICIVID • Call</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="css/style.css">
+  <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 </head>
 <body>
 
 <div class="call-container">
 
-  <!-- VIDEO AREA -->
+  <!-- VIDEO GRID -->
   <div class="video-area">
     <video id="remoteVideo" autoplay playsinline></video>
     <video id="localVideo" autoplay muted playsinline class="local-video"></video>
@@ -18,22 +19,24 @@
       <button id="muteBtn">🎤</button>
       <button id="videoBtn">🎥</button>
       <button id="screenBtn">🖥</button>
-      <button id="endBtn" class="end">❌</button>
+      <button id="endBtn">❌</button>
     </div>
   </div>
 
   <!-- CHAT -->
   <div class="chat-panel">
     <div id="messages" class="messages"></div>
+
     <div class="chat-input">
       <input id="messageInput" placeholder="Type a message…" />
-      <button id="sendBtn">Send</button>
+      <button id="sendBtn">
+        📤
+      </button>
     </div>
   </div>
 
 </div>
-<script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 
-<script type="module" src="call.js"></script>
+<script type="module" src="js/call-peer.js"></script>
 </body>
 </html>
