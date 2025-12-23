@@ -100,18 +100,26 @@ pc.ontrack = (event) => {
 
 
   // ========== ICE CANDIDATES ==========
-  pc.onicecandidate = e => {
-    if (!e.candidate) return;
-    addDoc(
-      collection(
-        db,
-        "calls",
-        callId,
-        uid === callData.caller ? "iceCaller" : "iceReceiver"
-      ),
-      e.candidate.toJSON()
-    );
-  };
+  let isCaller = false;
+
+const callSnap = await getDoc(callRef);
+const callData = callSnap.data();
+
+if (!callData?.offer) {
+  isCaller = true;
+}
+
+
+pc.onicecandidate = async (event) => {
+  if (!event.candidate) return;
+
+  if (isCaller) {
+    await addDoc(offerCandidates, event.candidate.toJSON());
+  } else {
+    await addDoc(answerCandidates, event.candidate.toJSON());
+  }
+};
+
 
   // ========== SIGNALING ==========
   if (uid === callData.caller) {
