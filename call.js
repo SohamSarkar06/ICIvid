@@ -40,29 +40,41 @@ const sendBtn = document.getElementById("sendBtn");
 const messages = document.getElementById("messages");
 const messageInput = document.getElementById("messageInput");
 
-// ================= AUTH GATE =================
+// ================= AUTH =================
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     location.href = "index.html";
     return;
   }
-  initCall(user.uid);
+  startCall(user.uid);
 });
 
 // ================= MAIN =================
-async function initCall(uid) {
+async function startCall(uid) {
   const callId = new URLSearchParams(location.search).get("call");
   const callRef = doc(db, "calls", callId);
 
   const snap = await getDoc(callRef);
   const callData = snap.data();
 
-  // ================= WEBRTC =================
+  // ================= WEBRTC (TURN FIX) =================
   const pc = new RTCPeerConnection({
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      {
+        urls: "turn:openrelay.metered.ca:80",
+        username: "openrelayproject",
+        credential: "openrelayproject"
+      },
+      {
+        urls: "turn:openrelay.metered.ca:443",
+        username: "openrelayproject",
+        credential: "openrelayproject"
+      }
+    ]
   });
 
-  // 🔑 EXPLICIT TRANSCEIVERS (CRITICAL FIX)
+  // 🔑 REQUIRED
   pc.addTransceiver("video", { direction: "sendrecv" });
   pc.addTransceiver("audio", { direction: "sendrecv" });
 
@@ -71,13 +83,12 @@ async function initCall(uid) {
     video: true,
     audio: true
   });
+
   localVideo.srcObject = localStream;
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
   const remoteStream = new MediaStream();
   remoteVideo.srcObject = remoteStream;
-  remoteVideo.autoplay = true;
-  remoteVideo.playsInline = true;
 
   pc.ontrack = (e) => {
     e.streams[0].getTracks().forEach(track => {
