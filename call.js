@@ -90,15 +90,14 @@ async function startCall(uid) {
 
   // ========== REMOTE STREAM ==========
   const remoteStream = new MediaStream();
-  remoteVideo.srcObject = remoteStream;
+remoteVideo.srcObject = remoteStream;
 
-  pc.ontrack = (e) => {
-    e.streams[0].getTracks().forEach(track => {
-      if (!remoteStream.getTracks().includes(track)) {
-        remoteStream.addTrack(track);
-      }
-    });
-  };
+pc.ontrack = (event) => {
+  event.streams[0].getTracks().forEach(track => {
+    remoteStream.addTrack(track);
+  });
+};
+
 
   // ========== ICE CANDIDATES ==========
   pc.onicecandidate = e => {
