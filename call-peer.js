@@ -14,16 +14,17 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "...replace with yours...",
+  apiKey: "AIzaSyBjPo05IXrOkzUVXsnx8wNaJwiRsXE2Onk",
   authDomain: "icivid.firebaseapp.com",
   projectId: "icivid",
-  appId: "..."
+  appId: "1:2684424094:web:2d63b2cb5cf98615b8108f"
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+initializeApp(firebaseConfig);
+const auth = getAuth();
+const db = getFirestore();
 
+// ================= DOM =================
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 const muteBtn = document.getElementById("muteBtn");
@@ -36,17 +37,20 @@ const messageInput = document.getElementById("messageInput");
 onAuthStateChanged(auth, async (user) => {
   if (!user) return location.href = "index.html";
 
-  const peer = new Peer(); // auto ID
-  let localStream = await navigator.mediaDevices.getUserMedia({
+  const params = new URLSearchParams(location.search);
+  const targetPeer = params.get("peer");
+
+  // 🔥 STABLE PEER ID
+  const peer = new Peer(user.uid);
+
+  // 🎥 Media
+  const localStream = await navigator.mediaDevices.getUserMedia({
     video: true,
     audio: true
   });
   localVideo.srcObject = localStream;
 
-  const urlParams = new URLSearchParams(location.search);
-  const targetPeer = urlParams.get("peer");
-
-  // ANSWER incoming call
+  // 📞 ANSWER CALLS
   peer.on("call", call => {
     call.answer(localStream);
     call.on("stream", remoteStream => {
@@ -54,16 +58,22 @@ onAuthStateChanged(auth, async (user) => {
     });
   });
 
-  // MAKE CALL if target passed
-  if (targetPeer) {
-    const call = peer.call(targetPeer, localStream);
-    call.on("stream", remoteStream => {
-      remoteVideo.srcObject = remoteStream;
-    });
-  }
+  // 📞 CALL ONLY AFTER PEER IS READY
+  peer.on("open", () => {
+    if (targetPeer && targetPeer !== user.uid) {
+      const call = peer.call(targetPeer, localStream);
+      call.on("stream", remoteStream => {
+        remoteVideo.srcObject = remoteStream;
+      });
+    }
+  });
 
-  // CHAT LISTEN
-  const chatRef = collection(db, "chats", targetPeer, "messages");
+  // ================= CHAT =================
+  if (!targetPeer) return;
+
+  const chatId = [user.uid, targetPeer].sort().join("_");
+  const chatRef = collection(db, "chats", chatId, "messages");
+
   const chatQuery = query(chatRef, orderBy("createdAt"));
   onSnapshot(chatQuery, snap => {
     snap.docChanges().forEach(change => {
@@ -87,6 +97,7 @@ onAuthStateChanged(auth, async (user) => {
     messageInput.value = "";
   };
 
+  // ❌ END CALL
   endBtn.onclick = () => {
     peer.destroy();
     localStream.getTracks().forEach(t => t.stop());
