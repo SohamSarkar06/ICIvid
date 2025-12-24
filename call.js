@@ -33,12 +33,8 @@ const db = getFirestore(app);
 const localVideo  = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 
-// 🔊 Dedicated remote audio element (REQUIRED)
-const remoteAudio = document.createElement("audio");
-remoteAudio.autoplay = true;
-remoteAudio.playsInline = true;
-remoteAudio.volume = 1.0;
-document.body.appendChild(remoteAudio);
+// 🔊 USE EXISTING AUDIO ELEMENT FROM HTML (IMPORTANT)
+const remoteAudio = document.getElementById("remoteAudio");
 
 const muteBtn   = document.getElementById("muteBtn");
 const videoBtn  = document.getElementById("videoBtn");
@@ -113,7 +109,6 @@ onAuthStateChanged(auth, async (user) => {
 /* ================= MEDIA ================= */
 
 async function initMedia() {
-  // 🔊 Explicit audio constraints (CRITICAL)
   localStream = await navigator.mediaDevices.getUserMedia({
     video: true,
     audio: {
@@ -149,17 +144,15 @@ async function initPeer(isCaller) {
       remoteVideo.play().catch(() => {});
     }
 
-    // 🔊 AUDIO (FINAL FIX)
+    // 🔊 AUDIO (FINAL, RELIABLE FIX)
     if (event.track.kind === "audio") {
-      const audioStream = new MediaStream([event.track]);
-      remoteAudio.srcObject = audioStream;
-
+      remoteAudio.srcObject = new MediaStream([event.track]);
       remoteAudio.muted = false;
       remoteAudio.volume = 1.0;
 
       remoteAudio.play()
         .then(() => console.log("🔊 Remote audio playing"))
-        .catch(err => console.warn("Audio play blocked:", err));
+        .catch(err => console.warn("Audio blocked:", err));
     }
   };
 
