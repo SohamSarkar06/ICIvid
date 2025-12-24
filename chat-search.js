@@ -118,19 +118,37 @@ function loadRecent(uid){
       return;
     }
 
-    for(const d of snap.docs){
-      const data = d.data();
-      const otherUid = data.users.find(u=>u!==uid);
+    // 🔥 SORT BY updatedAt (fallback safe)
+    const chats = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b)=>{
+        const ta = a.updatedAt?.toMillis?.() || 0;
+        const tb = b.updatedAt?.toMillis?.() || 0;
+        return tb - ta;
+      });
 
+    for(const c of chats){
+      const otherUid = c.users.find(u=>u!==uid);
       const uSnap = await getDoc(doc(db,"users",otherUid));
-      const name = uSnap.exists()
-        ? uSnap.data().username
-        : "User";
+      const name = uSnap.exists() ? uSnap.data().username : "User";
+
+      const lastSeen = c[`lastSeen_${uid}`] || 0;
+      const updatedAt = c.updatedAt?.toMillis?.() || 0;
+
+      const unread = updatedAt > lastSeen;
 
       recent.innerHTML += `
         <div class="user-row" data-uid="${otherUid}">
-          <strong>${name}</strong><br>
-          <small style="opacity:.6">${data.lastMessage || "Start chatting"}</small>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>${name}</strong>
+            ${unread ? `<span style="
+              width:8px;
+              height:8px;
+              background:#3b82f6;
+              border-radius:50%;
+              display:inline-block;"></span>` : ""}
+          </div>
+          <small style="opacity:.6">${c.lastMessage || "Start chatting"}</small>
         </div>`;
     }
   });
