@@ -1,184 +1,242 @@
-// ================= IMPORTS =================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import {
   getFirestore,
   doc,
   getDoc,
-  updateDoc,
-  onSnapshot,
-  collection,
+  setDoc,
   addDoc,
-  serverTimestamp,
+  collection,
+  onSnapshot,
   query,
-  orderBy
+  orderBy,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import {
+  getAuth,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-// ================= FIREBASE =================
+/* ================= FIREBASE INIT ================= */
+
 const firebaseConfig = {
   apiKey: "AIzaSyBjPo05IXrOkzUVXsnx8wNaJwiRsXE2Onk",
   authDomain: "icivid.firebaseapp.com",
-  projectId: "icivid",
-  appId: "1:2684424094:web:2d63b2cb5cf98615b8108f"
+  projectId: "icivid"
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ================= DOM =================
-const localVideo = document.getElementById("localVideo");
+/* ================= DOM ================= */
+
+const localVideo  = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
-const muteBtn = document.getElementById("muteBtn");
-const videoBtn = document.getElementById("videoBtn");
+
+const muteBtn   = document.getElementById("muteBtn");
+const videoBtn  = document.getElementById("videoBtn");
 const screenBtn = document.getElementById("screenBtn");
-const endBtn = document.getElementById("endBtn");
-const sendBtn = document.getElementById("sendBtn");
+const endBtn    = document.getElementById("endBtn");
+
+const msgInput = document.getElementById("msgInput");
+const sendMsg  = document.getElementById("sendMsg");
 const messages = document.getElementById("messages");
-const messageInput = document.getElementById("messageInput");
+
+const callInfo = document.getElementById("callInfo");
+const otherUserNameEl = document.getElementById("otherUserName");
+
+/* ================= STATE ================= */
+
+const callId = new URLSearchParams(location.search).get("call");
 
 let pc;
 let localStream;
 
-// ================= AUTH =================
+const callRef = doc(db, "calls", callId);
+const reqRef  = doc(db, "callRequests", callId);
+
+const offerCandidates  = collection(callRef, "offerCandidates");
+const answerCandidates = collection(callRef, "answerCandidates");
+const messagesRef      = collection(callRef, "messages");
+
+const rtcConfig = {
+  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+};
+
+/* ================= ENTRY ================= */
+
 onAuthStateChanged(auth, async (user) => {
-  if (!user) {
-    location.href = "index.html";
-    return;
+  if (!user) return;
+
+  const reqSnap = await getDoc(reqRef);
+  if (!reqSnap.exists()) return;
+
+  const req = reqSnap.data();
+  const isCaller = req.from === user.uid;
+
+  /* ---- show "you are in call with" banner ---- */
+  const otherUid = isCaller ? req.to : req.from;
+  const otherUserSnap = await getDoc(doc(db, "users", otherUid));
+  if (otherUserSnap.exists()) {
+    otherUserNameEl.textContent = otherUserSnap.data().username;
+    callInfo.classList.remove("hidden");
   }
-  startCall(user.uid);
+
+  await initMedia();
+  await initPeer(isCaller);
+  initChat(user.uid);
+
+  /* ---- call end listener ---- */
+  onSnapshot(callRef, snap => {
+    if (snap.data()?.ended) {
+      alert("Call ended by the other user");
+      pc?.close();
+      window.close();
+    }
+  });
 });
 
-// ================= MAIN =================
-async function startCall(uid) {
-  const callId = new URLSearchParams(location.search).get("call");
-  const callRef = doc(db, "calls", callId);
-  const callSnap = await getDoc(callRef);
-  const callData = callSnap.data();
+/* ================= MEDIA ================= */
 
-  // ================= PEER CONNECTION =================
-  pc = new RTCPeerConnection({
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" }
-    ]
-  });
-
-  pc.oniceconnectionstatechange = () => {
-    console.log("ICE:", pc.iceConnectionState);
-  };
-
-  // ================= LOCAL MEDIA =================
+async function initMedia() {
   localStream = await navigator.mediaDevices.getUserMedia({
     video: true,
     audio: true
   });
-
   localVideo.srcObject = localStream;
+}
 
-  localStream.getTracks().forEach(track => {
-    pc.addTrack(track, localStream);
-  });
+/* ================= WEBRTC ================= */
 
-  // ================= REMOTE MEDIA =================
-  const remoteStream = new MediaStream();
-  remoteVideo.srcObject = remoteStream;
+async function initPeer(isCaller) {
+  pc = new RTCPeerConnection(rtcConfig);
 
-  pc.ontrack = (event) => {
-    event.streams[0].getTracks().forEach(track => {
-      remoteStream.addTrack(track);
-    });
-  };
-
-  // ================= ICE =================
-  pc.onicecandidate = e => {
-    if (!e.candidate) return;
-
-    addDoc(
-      collection(
-        db,
-        "calls",
-        callId,
-        uid === callData.caller ? "iceCaller" : "iceReceiver"
-      ),
-      e.candidate.toJSON()
-    );
-  };
-
-  // ================= SIGNALING =================
-  if (uid === callData.caller) {
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    await updateDoc(callRef, { offer });
-
-    onSnapshot(callRef, snap => {
-      const d = snap.data();
-      if (d.answer && !pc.currentRemoteDescription) {
-        pc.setRemoteDescription(d.answer);
-      }
-    });
-
-    onSnapshot(
-      collection(db, "calls", callId, "iceReceiver"),
-      snap => snap.docChanges().forEach(c =>
-        pc.addIceCandidate(c.doc.data())
-      )
-    );
-  } else {
-    onSnapshot(callRef, async snap => {
-      const d = snap.data();
-      if (d.offer && !pc.currentRemoteDescription) {
-        await pc.setRemoteDescription(d.offer);
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        await updateDoc(callRef, { answer });
-      }
-    });
-
-    onSnapshot(
-      collection(db, "calls", callId, "iceCaller"),
-      snap => snap.docChanges().forEach(c =>
-        pc.addIceCandidate(c.doc.data())
-      )
-    );
-  }
-
-  // ================= CONTROLS =================
-  const audioTrack = localStream.getAudioTracks()[0];
-  const videoTrack = localStream.getVideoTracks()[0];
-
-  muteBtn.onclick = () => audioTrack.enabled = !audioTrack.enabled;
-  videoBtn.onclick = () => videoTrack.enabled = !videoTrack.enabled;
-
-  // ================= CHAT =================
-  const chatQuery = query(
-    collection(db, "chats", callId, "messages"),
-    orderBy("createdAt")
+  localStream.getTracks().forEach(track =>
+    pc.addTrack(track, localStream)
   );
 
-  sendBtn.onclick = async () => {
-    if (!messageInput.value.trim()) return;
-    await addDoc(collection(db, "chats", callId, "messages"), {
-      text: messageInput.value,
+  pc.ontrack = e => {
+    remoteVideo.srcObject = e.streams[0];
+  };
+
+  if (isCaller) {
+    pc.onicecandidate = e => {
+      if (e.candidate) addDoc(offerCandidates, e.candidate.toJSON());
+    };
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    await setDoc(callRef, {
+      offer: { type: offer.type, sdp: offer.sdp }
+    }, { merge: true });
+
+    onSnapshot(callRef, async snap => {
+      if (snap.data()?.answer && !pc.currentRemoteDescription) {
+        await pc.setRemoteDescription(
+          new RTCSessionDescription(snap.data().answer)
+        );
+      }
+    });
+
+    onSnapshot(answerCandidates, snap => {
+      snap.docChanges().forEach(c => {
+        if (c.type === "added") {
+          pc.addIceCandidate(new RTCIceCandidate(c.doc.data()));
+        }
+      });
+    });
+
+  } else {
+    const snap = await getDoc(callRef);
+    if (!snap.data()?.offer) return;
+
+    await pc.setRemoteDescription(
+      new RTCSessionDescription(snap.data().offer)
+    );
+
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    await setDoc(callRef, {
+      answer: { type: answer.type, sdp: answer.sdp }
+    }, { merge: true });
+
+    pc.onicecandidate = e => {
+      if (e.candidate) addDoc(answerCandidates, e.candidate.toJSON());
+    };
+
+    onSnapshot(offerCandidates, snap => {
+      snap.docChanges().forEach(c => {
+        if (c.type === "added") {
+          pc.addIceCandidate(new RTCIceCandidate(c.doc.data()));
+        }
+      });
+    });
+  }
+}
+
+/* ================= CHAT (WHATSAPP STYLE) ================= */
+
+function initChat(uid) {
+  const q = query(messagesRef, orderBy("createdAt"));
+
+  sendMsg.onclick = async () => {
+    if (!msgInput.value.trim()) return;
+
+    await addDoc(messagesRef, {
+      text: msgInput.value,
       sender: uid,
       createdAt: serverTimestamp()
     });
-    messageInput.value = "";
+
+    msgInput.value = "";
   };
 
-  onSnapshot(chatQuery, snap => {
-    snap.docChanges().forEach(c => {
-      if (c.type !== "added") return;
-      const m = c.doc.data();
-      const div = document.createElement("div");
-      div.textContent = m.text;
-      messages.appendChild(div);
+  onSnapshot(q, snap => {
+    messages.innerHTML = "";
+
+    snap.forEach(doc => {
+      const m = doc.data();
+      const time = m.createdAt?.toDate
+        ? m.createdAt.toDate().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit"
+          })
+        : "";
+
+      messages.innerHTML += `
+        <div class="message ${m.sender === uid ? "me" : "other"}">
+          ${m.text}
+          <span class="time">${time}</span>
+        </div>
+      `;
     });
-  });
 
-  endBtn.onclick = async () => {
-    pc.close();
-    localStream.getTracks().forEach(t => t.stop());
-    await updateDoc(callRef, { status: "ended" });
-    location.href = "dashboard.html";
-  };
+    messages.scrollTop = messages.scrollHeight;
+  });
 }
+
+/* ================= CONTROLS ================= */
+
+muteBtn.onclick = () => {
+  const track = localStream.getAudioTracks()[0];
+  track.enabled = !track.enabled;
+};
+
+videoBtn.onclick = () => {
+  const track = localStream.getVideoTracks()[0];
+  track.enabled = !track.enabled;
+};
+
+screenBtn.onclick = async () => {
+  const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+  const sender = pc.getSenders().find(s => s.track.kind === "video");
+  sender.replaceTrack(screenStream.getVideoTracks()[0]);
+};
+
+endBtn.onclick = async () => {
+  await setDoc(callRef, { ended: true }, { merge: true });
+  pc.close();
+  window.close();
+};
