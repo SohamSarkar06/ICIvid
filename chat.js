@@ -45,7 +45,7 @@ onAuthStateChanged(auth, async (user) => {
   const uSnap = await getDoc(doc(db, "users", otherUid));
   if (uSnap.exists()) chatUser.textContent = uSnap.data().username;
 
-  // ================= LOAD MESSAGES (WITH TIMESTAMP) =================
+  // ================= LOAD MESSAGES =================
   const q = query(messagesRef, orderBy("createdAt"));
   onSnapshot(q, snap => {
     messagesDiv.innerHTML = "";
@@ -69,7 +69,12 @@ onAuthStateChanged(auth, async (user) => {
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
   });
 
-  // ================= SEND MESSAGE (TIMESTAMP STORED) =================
+  // ✅ MARK CHAT AS READ (SAFE, NON-BLOCKING)
+  setDoc(chatRef, {
+    [`lastSeen_${user.uid}`]: serverTimestamp()
+  }, { merge: true }).catch(() => {});
+
+  // ================= SEND MESSAGE =================
   sendBtn.onclick = async () => {
     if (!msgInput.value.trim()) return;
 
@@ -79,8 +84,10 @@ onAuthStateChanged(auth, async (user) => {
       createdAt: serverTimestamp()
     });
 
+    // ✅ REQUIRED FOR UNREAD LOGIC
     await setDoc(chatRef, {
       lastMessage: msgInput.value,
+      lastMessageSender: user.uid,
       updatedAt: serverTimestamp()
     }, { merge: true });
 
