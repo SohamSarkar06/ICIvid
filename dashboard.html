@@ -1,54 +1,235 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Dashboard • ICIVID</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
+// ================= IMPORTS =================
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import {
+  getAuth,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import {
+  getFirestore,
+  collection,
+  getDocs,
+  addDoc,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  onSnapshot,
+  query,
+  where,
+  orderBy,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-<div class="auth-card">
+// ================= INIT =================
+const app = initializeApp({
+  apiKey: "AIzaSyBjPo05IXrOkzUVXsnx8wNaJwiRsXE2Onk",
+  authDomain: "icivid.firebaseapp.com",
+  projectId: "icivid"
+});
 
-  <!-- LOGO -->
-  <div class="logo">
-    <img src="assets/logo.svg" alt="ICIVID">
-  </div>
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-  <!-- WELCOME USER -->
-  <h3 id="welcomeUser" style="text-align:center; margin-bottom:12px;"></h3>
+// ================= DOM =================
+const logoutBtn = document.getElementById("logoutBtn");
+const searchInput = document.getElementById("searchUser");
+const resultsDiv = document.getElementById("results");
+const welcomeUser = document.getElementById("welcomeUser");
 
-  <!-- LOGOUT -->
-  <button id="logoutBtn" class="secondary">Logout</button>
+const chatList = document.getElementById("chatList");
+const callHistoryDiv = document.getElementById("callHistory");
 
-  <!-- SEARCH USERS -->
-  <h3 style="margin-top:20px;">Search Users</h3>
+const incomingModal = document.getElementById("incomingCall");
+const callerNameEl = document.getElementById("callerName");
+const acceptBtn = document.getElementById("accept");
+const declineBtn = document.getElementById("decline");
 
-  <input
-    id="searchUser"
-    placeholder="Search by username"
-    autocomplete="off"
-  >
+// ================= HELPERS =================
+function getChatId(a, b) {
+  return [a, b].sort().join("_");
+}
 
-  <div id="results"></div>
+// ================= AUTH =================
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    location.href = "index.html";
+    return;
+  }
 
-</div>
+  const snap = await getDoc(doc(db, "users", user.uid));
+  if (snap.exists()) {
+    welcomeUser.textContent = `Hi, ${snap.data().username} 👋`;
+  }
 
-<div id="incomingCall" class="modal hidden">
-  <div class="call-popup-card">
-    <h3>📞 Incoming Call</h3>
-    <p id="callerName">Someone is calling you</p>
+  listenForIncomingCalls(user.uid);
+  loadChats(user.uid);
+  loadCallHistory(user.uid);
+});
 
-    <div class="modal-actions">
-      <button id="accept" class="primary">Accept</button>
-      <button id="decline" class="secondary">Decline</button>
-    </div>
-  </div>
-</div>
+// ================= LOGOUT =================
+logoutBtn.onclick = async () => {
+  await signOut(auth);
+  location.href = "index.html";
+};
 
+// ================= SEARCH USERS =================
+searchInput.addEventListener("input", async () => {
+  const val = searchInput.value.trim().toLowerCase();
+  resultsDiv.innerHTML = "";
+  if (!val) return;
 
-<!-- DASHBOARD LOGIC -->
-<script type="module" src="dashboard.js"></script>
+  const snap = await getDocs(collection(db, "users"));
 
-</body>
-</html>
+  snap.forEach(docu => {
+    if (docu.id === auth.currentUser.uid) return;
+    const u = docu.data();
+    if (!u.username) return;
+
+    if (u.username.toLowerCase().includes(val)) {
+      resultsDiv.innerHTML += `
+        <div class="user-row">
+          <span>${u.username}</span>
+          <button onclick="openChatWith('${docu.id}')">💬</button>
+          <button onclick="startCall('${docu.id}')">📞</button>
+        </div>
+      `;
+    }
+  });
+});
+
+// ================= START CALL (SINGLE PIPELINE) =================
+window.startCall = async (receiverId) => {
+  const now = Date.now();
+
+  const req = await addDoc(collection(db, "callRequests"), {
+    from: auth.currentUser.uid,
+    to: receiverId,
+    status: "pending",
+    createdAt: now,
+    expiresAt: now + 5 * 60 * 1000
+  });
+
+  location.href = `call-wait.html?req=${req.id}`;
+};
+
+// ================= INCOMING CALL =================
+function listenForIncomingCalls(uid) {
+  const q = query(
+    collection(db, "callRequests"),
+    where("to", "==", uid),
+    where("status", "==", "pending")
+  );
+
+  onSnapshot(q, async snap => {
+    for (const docu of snap.docs) {
+      const data = docu.data();
+      const callerSnap = await getDoc(doc(db, "users", data.from));
+      callerNameEl.textContent = callerSnap.exists()
+        ? `${callerSnap.data().username} is calling`
+        : "Incoming call";
+
+      incomingModal.classList.remove("hidden");
+
+      acceptBtn.onclick = async () => {
+        await updateDoc(doc(db, "callRequests", docu.id), {
+          status: "accepted"
+        });
+
+        await setDoc(doc(db, "calls", docu.id), {
+          caller: data.from,
+          receiver: uid,
+          startedAt: Date.now()
+        });
+
+        location.href = `call.html?call=${docu.id}`;
+      };
+
+      declineBtn.onclick = async () => {
+        await updateDoc(doc(db, "callRequests", docu.id), {
+          status: "declined"
+        });
+        incomingModal.classList.add("hidden");
+      };
+    }
+  });
+}
+
+// ================= OPEN / CREATE CHAT =================
+window.openChatWith = async (otherUid) => {
+  const uid = auth.currentUser.uid;
+  const chatId = getChatId(uid, otherUid);
+  const chatRef = doc(db, "chats", chatId);
+
+  const snap = await getDoc(chatRef);
+  if (!snap.exists()) {
+    await setDoc(chatRef, {
+      users: [uid, otherUid],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      lastMessage: ""
+    });
+  }
+
+  location.href = `chat.html?chat=${chatId}&user=${otherUid}`;
+};
+
+// ================= CHAT LIST =================
+function loadChats(uid) {
+  const q = query(
+    collection(db, "chats"),
+    where("users", "array-contains", uid),
+    orderBy("updatedAt", "desc")
+  );
+
+  onSnapshot(q, async snap => {
+    chatList.innerHTML = "";
+
+    for (const docu of snap.docs) {
+      const chat = docu.data();
+      const otherUid = chat.users.find(u => u !== uid);
+      const userSnap = await getDoc(doc(db, "users", otherUid));
+      const name = userSnap.exists() ? userSnap.data().username : "User";
+
+      chatList.innerHTML += `
+        <div class="chat-item" onclick="openChat('${docu.id}','${otherUid}')">
+          <strong>${name}</strong><br>
+          <small>${chat.lastMessage || "New chat"}</small>
+          <button onclick="event.stopPropagation(); startCall('${otherUid}')">📞</button>
+        </div>
+      `;
+    }
+  });
+}
+
+window.openChat = (chatId, otherUid) => {
+  location.href = `chat.html?chat=${chatId}&user=${otherUid}`;
+};
+
+// ================= CALL HISTORY → CHAT =================
+function loadCallHistory(uid) {
+  const q = query(
+    collection(db, "callHistory"),
+    where("participants", "array-contains", uid),
+    orderBy("endedAt", "desc")
+  );
+
+  onSnapshot(q, async snap => {
+    callHistoryDiv.innerHTML = "";
+
+    for (const docu of snap.docs) {
+      const c = docu.data();
+      const otherUid = c.participants.find(u => u !== uid);
+      const userSnap = await getDoc(doc(db, "users", otherUid));
+      const name = userSnap.exists() ? userSnap.data().username : "User";
+
+      callHistoryDiv.innerHTML += `
+        <div class="history-item"
+             onclick="openChatWith('${otherUid}')">
+          <strong>${name}</strong><br>
+          ⏱ ${Math.floor(c.duration / 60)}m ${c.duration % 60}s
+        </div>
+      `;
+    }
+  });
+}
