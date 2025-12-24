@@ -28,12 +28,15 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+/* ================= CALL TIMING ================= */
+
+const callStartTime = Date.now();
+let otherUserId = null;
+
 /* ================= DOM ================= */
 
 const localVideo  = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
-
-// 🔊 USE EXISTING AUDIO ELEMENT FROM HTML (IMPORTANT)
 const remoteAudio = document.getElementById("remoteAudio");
 
 const muteBtn   = document.getElementById("muteBtn");
@@ -86,7 +89,10 @@ onAuthStateChanged(auth, async (user) => {
   const req = reqSnap.data();
   const isCaller = req.from === user.uid;
 
+  // 🔥 SET OTHER USER (CRITICAL FIX)
   const otherUid = isCaller ? req.to : req.from;
+  otherUserId = otherUid;
+
   const otherUserSnap = await getDoc(doc(db, "users", otherUid));
   if (otherUserSnap.exists()) {
     otherUserNameEl.textContent = otherUserSnap.data().username;
@@ -131,9 +137,6 @@ async function initPeer(isCaller) {
   );
 
   pc.ontrack = (event) => {
-    console.log("🎧 Remote track:", event.track.kind);
-
-    // 🎥 VIDEO (UNCHANGED)
     if (event.track.kind === "video") {
       let vStream = remoteVideo.srcObject;
       if (!vStream) {
@@ -144,15 +147,11 @@ async function initPeer(isCaller) {
       remoteVideo.play().catch(() => {});
     }
 
-    // 🔊 AUDIO (FINAL, RELIABLE FIX)
     if (event.track.kind === "audio") {
       remoteAudio.srcObject = new MediaStream([event.track]);
       remoteAudio.muted = false;
       remoteAudio.volume = 1.0;
-
-      remoteAudio.play()
-        .then(() => console.log("🔊 Remote audio playing"))
-        .catch(err => console.warn("Audio blocked:", err));
+      remoteAudio.play().catch(() => {});
     }
   };
 
@@ -272,8 +271,19 @@ screenBtn.onclick = async () => {
   sender.replaceTrack(screenStream.getVideoTracks()[0]);
 };
 
+/* ================= END CALL (HISTORY FIX) ================= */
+
 endBtn.onclick = async () => {
+  const duration = Math.floor((Date.now() - callStartTime) / 1000);
+
+  await addDoc(collection(db, "callHistory"), {
+    participants: [auth.currentUser.uid, otherUserId],
+    duration,
+    endedAt: serverTimestamp()
+  });
+
   await setDoc(callRef, { ended: true }, { merge: true });
+
   pc.close();
   window.close();
 };
