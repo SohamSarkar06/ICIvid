@@ -41,10 +41,8 @@ onAuthStateChanged(auth, u=>{
 // ================= SEARCH USERS =================
 input.oninput = async () => {
   const v = input.value.toLowerCase().trim();
-
   results.innerHTML = "";
 
-  // 🔥 WhatsApp-like behavior
   if (!v) {
     results.style.display = "none";
     recent.style.display = "block";
@@ -63,32 +61,31 @@ input.oninput = async () => {
     if(d.data().username.toLowerCase().includes(v)){
       results.innerHTML += `
         <div class="user-row" data-uid="${d.id}">
-          ${d.data().username}
+          <strong>${d.data().username}</strong>
         </div>`;
     }
   });
 };
 
-// ================= SEARCH CLICK SELECTION (UI ONLY) =================
-results.addEventListener("click", e => {
-  const row = e.target.closest(".user-row");
-  if (!row) return;
+// ================= CLICK HANDLER (SHARED) =================
+function handleUserClick(container){
+  container.addEventListener("click", e=>{
+    const row = e.target.closest(".user-row");
+    if (!row) return;
 
-  // Remove previous selection
-  document
-    .querySelectorAll(".user-row.selected")
-    .forEach(el => el.classList.remove("selected"));
+    document.querySelectorAll(".user-row.selected")
+      .forEach(el=>el.classList.remove("selected"));
 
-  // Add highlight animation
-  row.classList.add("selected");
+    row.classList.add("selected");
 
-  const uid = row.dataset.uid;
+    setTimeout(()=>{
+      openChat(row.dataset.uid);
+    },180);
+  });
+}
 
-  // Small delay so animation is visible
-  setTimeout(() => {
-    openChat(uid);
-  }, 180);
-});
+handleUserClick(results);
+handleUserClick(recent);
 
 // ================= OPEN CHAT =================
 window.openChat = async (other) => {
@@ -131,10 +128,9 @@ function loadRecent(uid){
       const name = uSnap.exists()?uSnap.data().username:"User";
 
       recent.innerHTML += `
-        <div class="chat-item"
-          onclick="location.href='chat.html?chat=${d.id}&user=${other}'">
-          <strong>${name}</strong><br>
-          <small>${c.lastMessage || "Start chatting"}</small>
+        <div class="user-row" data-uid="${other}">
+          <strong>${name}</strong>
+          <div class="last-msg">${c.lastMessage || "Start chatting"}</div>
         </div>`;
     }
   });
