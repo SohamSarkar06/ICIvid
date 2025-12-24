@@ -16,19 +16,18 @@ import {
   updateDoc,
   onSnapshot,
   query,
-  where
+  where,
+  orderBy,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// ================= FIREBASE CONFIG =================
-const firebaseConfig = {
+// ================= INIT =================
+const app = initializeApp({
   apiKey: "AIzaSyBjPo05IXrOkzUVXsnx8wNaJwiRsXE2Onk",
   authDomain: "icivid.firebaseapp.com",
-  projectId: "icivid",
-  appId: "1:2684424094:web:2d63b2cb5cf98615b8108f"
-};
+  projectId: "icivid"
+});
 
-// ================= INIT =================
-const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -37,105 +36,84 @@ const logoutBtn = document.getElementById("logoutBtn");
 const searchInput = document.getElementById("searchUser");
 const resultsDiv = document.getElementById("results");
 const welcomeUser = document.getElementById("welcomeUser");
+
+const chatList = document.getElementById("chatList");
+const callHistoryDiv = document.getElementById("callHistory");
+
 const incomingModal = document.getElementById("incomingCall");
+const callerNameEl = document.getElementById("callerName");
 const acceptBtn = document.getElementById("accept");
 const declineBtn = document.getElementById("decline");
 
-// ================= AUTH (SINGLE SOURCE OF TRUTH) =================
+// ================= HELPERS =================
+function getChatId(a, b) {
+  return [a, b].sort().join("_");
+}
+
+// ================= AUTH =================
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     location.href = "index.html";
     return;
   }
 
-  // Show username
   const snap = await getDoc(doc(db, "users", user.uid));
-  if (snap.exists() && snap.data().username) {
+  if (snap.exists()) {
     welcomeUser.textContent = `Hi, ${snap.data().username} 👋`;
   }
 
-  // Listen for incoming calls AFTER auth is ready
   listenForIncomingCalls(user.uid);
+  loadChats(user.uid);
+  loadCallHistory(user.uid);
 });
 
 // ================= LOGOUT =================
-logoutBtn.addEventListener("click", async () => {
+logoutBtn.onclick = async () => {
   await signOut(auth);
   location.href = "index.html";
-});
+};
 
 // ================= SEARCH USERS =================
 searchInput.addEventListener("input", async () => {
-  const value = searchInput.value.trim().toLowerCase();
+  const val = searchInput.value.trim().toLowerCase();
   resultsDiv.innerHTML = "";
-  if (!value) return;
+  if (!val) return;
 
   const snap = await getDocs(collection(db, "users"));
 
   snap.forEach(docu => {
-    const user = docu.data();
-    if (!user.username) return;
     if (docu.id === auth.currentUser.uid) return;
+    const u = docu.data();
+    if (!u.username) return;
 
-    if (user.username.toLowerCase().includes(value)) {
+    if (u.username.toLowerCase().includes(val)) {
       resultsDiv.innerHTML += `
         <div class="user-row">
-          <span>${user.username}</span>
-          <button onclick="startCall('${docu.id}')">Call</button>
+          <span>${u.username}</span>
+          <button onclick="openChatWith('${docu.id}')">💬</button>
+          <button onclick="startCall('${docu.id}')">📞</button>
         </div>
       `;
     }
   });
 });
 
-// ================= SEND CALL REQUEST =================
+// ================= START CALL (SINGLE PIPELINE) =================
 window.startCall = async (receiverId) => {
-  try {
-    const now = Date.now();
+  const now = Date.now();
 
-    // 1️⃣ Create Daily room
-    const res = await fetch("https://api.daily.co/v1/rooms", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer dda0f5a0a6fa21041bfbf25ab2067d03a797db5c0cbae659ff9e4e300c30267d"
-      },
-      body: JSON.stringify({
-        properties: {
-          enable_screenshare: true,
-          start_audio_off: false,
-          start_video_off: false
-        }
-      })
-    });
+  const req = await addDoc(collection(db, "callRequests"), {
+    from: auth.currentUser.uid,
+    to: receiverId,
+    status: "pending",
+    createdAt: now,
+    expiresAt: now + 5 * 60 * 1000
+  });
 
-    const room = await res.json();
-
-    if (!room.url) {
-      throw new Error("Failed to create Daily room");
-    }
-
-    // 2️⃣ Create call request (store room URL)
-    const req = await addDoc(collection(db, "callRequests"), {
-      from: auth.currentUser.uid,
-      to: receiverId,
-      roomUrl: room.url,          // 🔥 IMPORTANT
-      status: "pending",
-      createdAt: now,
-      expiresAt: now + 5 * 60 * 1000
-    });
-
-    // 3️⃣ Redirect caller to waiting screen
-    location.href = `call-wait.html?req=${req.id}`;
-
-  } catch (err) {
-    console.error("Start call failed:", err);
-    alert("Unable to start call. Try again.");
-  }
+  location.href = `call-wait.html?req=${req.id}`;
 };
 
-
-// ================= INCOMING CALL LISTENER =================
+// ================= INCOMING CALL =================
 function listenForIncomingCalls(uid) {
   const q = query(
     collection(db, "callRequests"),
@@ -143,43 +121,117 @@ function listenForIncomingCalls(uid) {
     where("status", "==", "pending")
   );
 
-  onSnapshot(q, snap => {
-    snap.forEach(docu => {
-      showIncoming(docu.id, docu.data());
-    });
+  onSnapshot(q, async snap => {
+    for (const docu of snap.docs) {
+      const data = docu.data();
+      const callerSnap = await getDoc(doc(db, "users", data.from));
+      callerNameEl.textContent = callerSnap.exists()
+        ? `${callerSnap.data().username} is calling`
+        : "Incoming call";
+
+      incomingModal.classList.remove("hidden");
+
+      acceptBtn.onclick = async () => {
+        await updateDoc(doc(db, "callRequests", docu.id), {
+          status: "accepted"
+        });
+
+        await setDoc(doc(db, "calls", docu.id), {
+          caller: data.from,
+          receiver: uid,
+          startedAt: Date.now()
+        });
+
+        location.href = `call.html?call=${docu.id}`;
+      };
+
+      declineBtn.onclick = async () => {
+        await updateDoc(doc(db, "callRequests", docu.id), {
+          status: "declined"
+        });
+        incomingModal.classList.add("hidden");
+      };
+    }
   });
 }
 
-// ================= INCOMING CALL UI (FIXED) =================
-function showIncoming(callId, data) {
-  incomingModal.classList.remove("hidden");
+// ================= OPEN / CREATE CHAT =================
+window.openChatWith = async (otherUid) => {
+  const uid = auth.currentUser.uid;
+  const chatId = getChatId(uid, otherUid);
+  const chatRef = doc(db, "chats", chatId);
 
-  acceptBtn.onclick = async () => {
-    try {
-      // 1️⃣ Accept request
-      await updateDoc(doc(db, "callRequests", callId), {
-        status: "accepted"
-      });
-
-      // 2️⃣ Create signaling document
-      await setDoc(doc(db, "calls", callId), {
-        caller: data.from,
-        receiver: auth.currentUser.uid,
-        createdAt: Date.now()
-      });
-
-      // 3️⃣ Move receiver into call
-      location.href = `call.html?call=${callId}`;
-    } catch (err) {
-      console.error("Accept failed:", err);
-      alert("Failed to accept call");
-    }
-  };
-
-  declineBtn.onclick = async () => {
-    await updateDoc(doc(db, "callRequests", callId), {
-      status: "declined"
+  const snap = await getDoc(chatRef);
+  if (!snap.exists()) {
+    await setDoc(chatRef, {
+      users: [uid, otherUid],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      lastMessage: ""
     });
-    incomingModal.classList.add("hidden");
-  };
+  }
+
+  location.href = `chat.html?chat=${chatId}&user=${otherUid}`;
+};
+
+// ================= CHAT LIST =================
+function loadChats(uid) {
+  const q = query(
+    collection(db, "chats"),
+    where("users", "array-contains", uid),
+    orderBy("updatedAt", "desc")
+  );
+
+  onSnapshot(q, async snap => {
+    chatList.innerHTML = "";
+
+    for (const docu of snap.docs) {
+      const chat = docu.data();
+      const otherUid = chat.users.find(u => u !== uid);
+      const userSnap = await getDoc(doc(db, "users", otherUid));
+      const name = userSnap.exists() ? userSnap.data().username : "User";
+
+      chatList.innerHTML += `
+        <div class="chat-item" onclick="openChat('${docu.id}','${otherUid}')">
+          <strong>${name}</strong><br>
+          <small>${chat.lastMessage || "New chat"}</small>
+          <button onclick="event.stopPropagation(); startCall('${otherUid}')">📞</button>
+        </div>
+      `;
+    }
+  });
 }
+
+window.openChat = (chatId, otherUid) => {
+  location.href = `chat.html?chat=${chatId}&user=${otherUid}`;
+};
+
+// ================= CALL HISTORY → CHAT =================
+function loadCallHistory(uid) {
+  const q = query(
+    collection(db, "callHistory"),
+    where("participants", "array-contains", uid),
+    orderBy("endedAt", "desc")
+  );
+
+  onSnapshot(q, async snap => {
+    callHistoryDiv.innerHTML = "";
+
+    for (const docu of snap.docs) {
+      const c = docu.data();
+      const otherUid = c.participants.find(u => u !== uid);
+      const userSnap = await getDoc(doc(db, "users", otherUid));
+      const name = userSnap.exists() ? userSnap.data().username : "User";
+
+      callHistoryDiv.innerHTML += `
+        <div class="history-item"
+             onclick="openChatWith('${otherUid}')">
+          <strong>${name}</strong><br>
+          ⏱ ${Math.floor(c.duration / 60)}m ${c.duration % 60}s
+        </div>
+      `;
+    }
+  });
+}
+
+is this chat fully working?
