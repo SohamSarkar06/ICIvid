@@ -1,26 +1,36 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>Chat • ICIVID</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
+<body class="chat-page">
 
 <div class="chat-container">
 
+  <!-- HEADER -->
   <div class="chat-header">
-    <span id="chatUser">User</span>
-    <button id="callBtn">📞</button>
+    <div class="chat-user">
+      <span class="avatar">👤</span>
+      <span id="chatUser" class="chat-username">User</span>
+    </div>
+    <button id="callBtn" class="call-btn">📞</button>
   </div>
 
+  <!-- MESSAGES -->
   <div class="messages" id="messages"></div>
 
+  <!-- INPUT -->
   <div class="chat-input">
     <input id="msgInput" placeholder="Type a message..." />
     <button id="sendBtn">➤</button>
   </div>
 
 </div>
+
+<!-- INCOMING CALL MODAL -->
 <div id="incomingCall" class="modal hidden">
   <div class="call-popup-card">
     <h3>📞 Incoming Call</h3>
