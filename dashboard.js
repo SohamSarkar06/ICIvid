@@ -17,11 +17,10 @@ import {
   onSnapshot,
   query,
   where,
-  orderBy,
-  serverTimestamp
+  orderBy
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// ================= INIT =================
+// ================= FIREBASE =================
 const app = initializeApp({
   apiKey: "AIzaSyBjPo05IXrOkzUVXsnx8wNaJwiRsXE2Onk",
   authDomain: "icivid.firebaseapp.com",
@@ -37,13 +36,12 @@ const searchInput = document.getElementById("searchUser");
 const resultsDiv = document.getElementById("results");
 const welcomeUser = document.getElementById("welcomeUser");
 
-const chatList = document.getElementById("chatList");
-const callHistoryDiv = document.getElementById("callHistory");
-
 const incomingModal = document.getElementById("incomingCall");
-const callerNameEl = document.getElementById("callerName");
 const acceptBtn = document.getElementById("accept");
 const declineBtn = document.getElementById("decline");
+
+// 🔥 NEW
+const historyDiv = document.getElementById("callHistory");
 
 // ================= HELPERS =================
 function getChatId(a, b) {
@@ -63,7 +61,6 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   listenForIncomingCalls(user.uid);
-  loadChats(user.uid);
   loadCallHistory(user.uid);
 });
 
@@ -73,32 +70,31 @@ logoutBtn.onclick = async () => {
   location.href = "index.html";
 };
 
-// ================= SEARCH USERS =================
+// ================= SEARCH USERS (UNCHANGED) =================
 searchInput.addEventListener("input", async () => {
-  const val = searchInput.value.trim().toLowerCase();
+  const value = searchInput.value.trim().toLowerCase();
   resultsDiv.innerHTML = "";
-  if (!val) return;
+  if (!value) return;
 
   const snap = await getDocs(collection(db, "users"));
 
   snap.forEach(docu => {
+    const user = docu.data();
+    if (!user.username) return;
     if (docu.id === auth.currentUser.uid) return;
-    const u = docu.data();
-    if (!u.username) return;
 
-    if (u.username.toLowerCase().includes(val)) {
+    if (user.username.toLowerCase().includes(value)) {
       resultsDiv.innerHTML += `
         <div class="user-row">
-          <span>${u.username}</span>
-          <button onclick="openChatWith('${docu.id}')">💬</button>
-          <button onclick="startCall('${docu.id}')">📞</button>
+          <span>${user.username}</span>
+          <button onclick="startCall('${docu.id}')">Call</button>
         </div>
       `;
     }
   });
 });
 
-// ================= START CALL (SINGLE PIPELINE) =================
+// ================= CALL PIPELINE (UNCHANGED) =================
 window.startCall = async (receiverId) => {
   const now = Date.now();
 
@@ -121,14 +117,8 @@ function listenForIncomingCalls(uid) {
     where("status", "==", "pending")
   );
 
-  onSnapshot(q, async snap => {
-    for (const docu of snap.docs) {
-      const data = docu.data();
-      const callerSnap = await getDoc(doc(db, "users", data.from));
-      callerNameEl.textContent = callerSnap.exists()
-        ? `${callerSnap.data().username} is calling`
-        : "Incoming call";
-
+  onSnapshot(q, snap => {
+    snap.forEach(docu => {
       incomingModal.classList.remove("hidden");
 
       acceptBtn.onclick = async () => {
@@ -137,7 +127,7 @@ function listenForIncomingCalls(uid) {
         });
 
         await setDoc(doc(db, "calls", docu.id), {
-          caller: data.from,
+          caller: docu.data().from,
           receiver: uid,
           startedAt: Date.now()
         });
@@ -151,62 +141,11 @@ function listenForIncomingCalls(uid) {
         });
         incomingModal.classList.add("hidden");
       };
-    }
-  });
-}
-
-// ================= OPEN / CREATE CHAT =================
-window.openChatWith = async (otherUid) => {
-  const uid = auth.currentUser.uid;
-  const chatId = getChatId(uid, otherUid);
-  const chatRef = doc(db, "chats", chatId);
-
-  const snap = await getDoc(chatRef);
-  if (!snap.exists()) {
-    await setDoc(chatRef, {
-      users: [uid, otherUid],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      lastMessage: ""
     });
-  }
-
-  location.href = `chat.html?chat=${chatId}&user=${otherUid}`;
-};
-
-// ================= CHAT LIST =================
-function loadChats(uid) {
-  const q = query(
-    collection(db, "chats"),
-    where("users", "array-contains", uid),
-    orderBy("updatedAt", "desc")
-  );
-
-  onSnapshot(q, async snap => {
-    chatList.innerHTML = "";
-
-    for (const docu of snap.docs) {
-      const chat = docu.data();
-      const otherUid = chat.users.find(u => u !== uid);
-      const userSnap = await getDoc(doc(db, "users", otherUid));
-      const name = userSnap.exists() ? userSnap.data().username : "User";
-
-      chatList.innerHTML += `
-        <div class="chat-item" onclick="openChat('${docu.id}','${otherUid}')">
-          <strong>${name}</strong><br>
-          <small>${chat.lastMessage || "New chat"}</small>
-          <button onclick="event.stopPropagation(); startCall('${otherUid}')">📞</button>
-        </div>
-      `;
-    }
   });
 }
 
-window.openChat = (chatId, otherUid) => {
-  location.href = `chat.html?chat=${chatId}&user=${otherUid}`;
-};
-
-// ================= CALL HISTORY → CHAT =================
+// ================= CALL HISTORY =================
 function loadCallHistory(uid) {
   const q = query(
     collection(db, "callHistory"),
@@ -215,15 +154,16 @@ function loadCallHistory(uid) {
   );
 
   onSnapshot(q, async snap => {
-    callHistoryDiv.innerHTML = "";
+    historyDiv.innerHTML = "";
 
     for (const docu of snap.docs) {
       const c = docu.data();
       const otherUid = c.participants.find(u => u !== uid);
       const userSnap = await getDoc(doc(db, "users", otherUid));
+
       const name = userSnap.exists() ? userSnap.data().username : "User";
 
-      callHistoryDiv.innerHTML += `
+      historyDiv.innerHTML += `
         <div class="history-item"
              onclick="openChatWith('${otherUid}')">
           <strong>${name}</strong><br>
@@ -234,4 +174,22 @@ function loadCallHistory(uid) {
   });
 }
 
-is this chat fully working?
+// ================= OPEN CHAT FROM HISTORY =================
+window.openChatWith = async (otherUid) => {
+  const uid = auth.currentUser.uid;
+  const chatId = getChatId(uid, otherUid);
+
+  const chatRef = doc(db, "chats", chatId);
+  const snap = await getDoc(chatRef);
+
+  if (!snap.exists()) {
+    await setDoc(chatRef, {
+      users: [uid, otherUid],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      lastMessage: ""
+    });
+  }
+
+  location.href = `chat.html?chat=${chatId}&user=${otherUid}`;
+};
