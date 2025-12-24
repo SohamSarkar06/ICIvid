@@ -44,7 +44,7 @@ input.oninput = async () => {
 
   results.innerHTML = "";
 
-  // 🔥 WHATSAPP BEHAVIOR
+  // 🔥 WhatsApp-like behavior
   if (!v) {
     results.style.display = "none";
     recent.style.display = "block";
@@ -62,12 +62,33 @@ input.oninput = async () => {
 
     if(d.data().username.toLowerCase().includes(v)){
       results.innerHTML += `
-        <div class="user-row" onclick="openChat('${d.id}')">
+        <div class="user-row" data-uid="${d.id}">
           ${d.data().username}
         </div>`;
     }
   });
 };
+
+// ================= SEARCH CLICK SELECTION (UI ONLY) =================
+results.addEventListener("click", e => {
+  const row = e.target.closest(".user-row");
+  if (!row) return;
+
+  // Remove previous selection
+  document
+    .querySelectorAll(".user-row.selected")
+    .forEach(el => el.classList.remove("selected"));
+
+  // Add highlight animation
+  row.classList.add("selected");
+
+  const uid = row.dataset.uid;
+
+  // Small delay so animation is visible
+  setTimeout(() => {
+    openChat(uid);
+  }, 180);
+});
 
 // ================= OPEN CHAT =================
 window.openChat = async (other) => {
