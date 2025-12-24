@@ -79,10 +79,12 @@ onAuthStateChanged(auth, async (user) => {
       createdAt: serverTimestamp()
     });
 
-    await setDoc(chatRef, {
-      lastMessage: msgInput.value,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
+await setDoc(chatRef, {
+  lastMessage: msgInput.value,
+  lastMessageSender: user.uid,
+  updatedAt: serverTimestamp()
+}, { merge: true });
+
 
     msgInput.value = "";
   };
