@@ -3,7 +3,29 @@
 <head>
   <title>Chats • ICIVID</title>
   <link rel="stylesheet" href="css/style.css">
+
+  <style>
+    /* ===== Search Result Styling ===== */
+    .user-row {
+      padding: 10px;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background 0.25s ease, transform 0.15s ease;
+    }
+
+    .user-row:hover {
+      background: #f0f0f0;
+    }
+
+    /* Selected user animation */
+    .user-row.selected {
+      background: #dbeafe; /* light blue */
+      transform: scale(1.02);
+      box-shadow: 0 0 0 2px rgba(59,130,246,0.3);
+    }
+  </style>
 </head>
+
 <body>
 
 <div class="auth-card">
@@ -13,12 +35,9 @@
   <div id="results"></div>
 
   <div id="recentChats"></div>
-<div id="results"></div>
-
 
   <button onclick="history.back()">⬅ Back</button>
 </div>
-
 
 <script type="module" src="chat-search.js"></script>
 </body>
