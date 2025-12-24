@@ -59,8 +59,17 @@ const offerCandidates  = collection(callRef, "offerCandidates");
 const answerCandidates = collection(callRef, "answerCandidates");
 const messagesRef      = collection(callRef, "messages");
 
+/* ================= ICE CONFIG (TURN) ================= */
+
 const rtcConfig = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    {
+      urls: "turn:global.relay.metered.ca:443?transport=tcp",
+      username: "97119b0d1ca1589bd69cfb33",
+      credential: "SfIwVlqOh3Zub8MW"
+    }
+  ]
 };
 
 /* ================= ENTRY ================= */
@@ -74,7 +83,7 @@ onAuthStateChanged(auth, async (user) => {
   const req = reqSnap.data();
   const isCaller = req.from === user.uid;
 
-  /* ---- show "you are in call with" banner ---- */
+  // Show "You are in call with X"
   const otherUid = isCaller ? req.to : req.from;
   const otherUserSnap = await getDoc(doc(db, "users", otherUid));
   if (otherUserSnap.exists()) {
@@ -86,7 +95,7 @@ onAuthStateChanged(auth, async (user) => {
   await initPeer(isCaller);
   initChat(user.uid);
 
-  /* ---- call end listener ---- */
+  // Call end listener
   onSnapshot(callRef, snap => {
     if (snap.data()?.ended) {
       alert("Call ended by the other user");
@@ -111,15 +120,31 @@ async function initMedia() {
 async function initPeer(isCaller) {
   pc = new RTCPeerConnection(rtcConfig);
 
+  // Send local tracks
   localStream.getTracks().forEach(track =>
     pc.addTrack(track, localStream)
   );
 
-  pc.ontrack = e => {
-    remoteVideo.srcObject = e.streams[0];
+  // 🔥 BULLETPROOF REMOTE VIDEO HANDLING
+  pc.ontrack = (event) => {
+    console.log("🎥 Remote track received:", event.track.kind);
+
+    let stream = remoteVideo.srcObject;
+    if (!stream) {
+      stream = new MediaStream();
+      remoteVideo.srcObject = stream;
+    }
+
+    stream.addTrack(event.track);
+
+    remoteVideo
+      .play()
+      .then(() => console.log("✅ Remote video playing"))
+      .catch(() => {});
   };
 
   if (isCaller) {
+    // ===== CALLER =====
     pc.onicecandidate = e => {
       if (e.candidate) addDoc(offerCandidates, e.candidate.toJSON());
     };
@@ -148,23 +173,30 @@ async function initPeer(isCaller) {
     });
 
   } else {
-    const snap = await getDoc(callRef);
-    if (!snap.data()?.offer) return;
-
-    await pc.setRemoteDescription(
-      new RTCSessionDescription(snap.data().offer)
-    );
-
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-
-    await setDoc(callRef, {
-      answer: { type: answer.type, sdp: answer.sdp }
-    }, { merge: true });
-
+    // ===== RECEIVER (FIXED) =====
     pc.onicecandidate = e => {
       if (e.candidate) addDoc(answerCandidates, e.candidate.toJSON());
     };
+
+    onSnapshot(callRef, async snap => {
+      const data = snap.data();
+
+      // Wait for offer ONCE
+      if (!data?.offer || pc.currentRemoteDescription) return;
+
+      console.log("📨 Offer received → creating answer");
+
+      await pc.setRemoteDescription(
+        new RTCSessionDescription(data.offer)
+      );
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      await setDoc(callRef, {
+        answer: { type: answer.type, sdp: answer.sdp }
+      }, { merge: true });
+    });
 
     onSnapshot(offerCandidates, snap => {
       snap.docChanges().forEach(c => {
@@ -176,7 +208,7 @@ async function initPeer(isCaller) {
   }
 }
 
-/* ================= CHAT (WHATSAPP STYLE) ================= */
+/* ================= CHAT ================= */
 
 function initChat(uid) {
   const q = query(messagesRef, orderBy("createdAt"));
@@ -240,3 +272,11 @@ endBtn.onclick = async () => {
   pc.close();
   window.close();
 };
+
+// Autoplay fallback
+document.body.addEventListener("click", () => {
+  if (remoteVideo.paused) {
+    remoteVideo.muted = false;
+    remoteVideo.play().catch(() => {});
+  }
+}, { once: true });
