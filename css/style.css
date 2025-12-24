@@ -260,3 +260,39 @@ video#remoteVideo {
   z-index: 10;
 }
 .call-info.hidden { display: none; }
+.dashboard {
+  display: flex;
+  height: 100vh;
+}
+
+.sidebar {
+  width: 260px;
+  padding: 20px;
+  background: #111;
+  color: #fff;
+}
+
+.main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 20px;
+}
+
+.panel {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.chat-item, .history-item {
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+}
+
+.chat-item:hover, .history-item:hover {
+  background: #f5f5f5;
+}
