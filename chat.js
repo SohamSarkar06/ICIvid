@@ -70,9 +70,10 @@ onAuthStateChanged(auth, async (user) => {
   });
 
   // ✅ MARK CHAT AS READ (SAFE, NON-BLOCKING)
-  setDoc(chatRef, {
-    [`lastSeen_${user.uid}`]: serverTimestamp()
-  }, { merge: true }).catch(() => {});
+ setDoc(chatRef, {
+  [`lastSeen_${user.uid}`]: true
+}, { merge: true }).catch(() => {});
+
 
   // ================= SEND MESSAGE =================
   sendBtn.onclick = async () => {
