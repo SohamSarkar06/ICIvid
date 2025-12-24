@@ -1,36 +1,48 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
   <title>ICIVID • Call</title>
-  <link rel="stylesheet" href="css/style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
 <div class="call-container">
 
-  <!-- VIDEO AREA -->
+  <!-- VIDEO AREA (70%) -->
   <div class="video-area">
+
+    <!-- CALL INFO BANNER -->
+    <div id="callInfo" class="call-info hidden">
+      You are in call with <span id="otherUserName"></span>
+    </div>
+
     <video id="remoteVideo" autoplay playsinline></video>
 
-    <video id="localVideo" autoplay muted playsinline class="local-video"></video>
+    <video
+      id="localVideo"
+      autoplay
+      muted
+      playsinline
+      class="local-video">
+    </video>
 
-    <!-- VIDEO CONTROLS -->
     <div class="video-controls">
       <button id="muteBtn">🎤</button>
-      <button id="videoBtn">🎥</button>
+      <button id="videoBtn">📷</button>
       <button id="screenBtn">🖥</button>
-      <button id="endBtn" class="end">❌</button>
+      <button id="endBtn" class="end">⛔</button>
     </div>
   </div>
 
-  <!-- CHAT -->
+  <!-- CHAT AREA (30%) -->
   <div class="chat-panel">
-    <div id="messages" class="messages"></div>
+    <div class="messages" id="messages"></div>
 
     <div class="chat-input">
-      <input id="messageInput" placeholder="Type a message…" />
-      <button id="sendBtn"><img src="https://img.icons8.com/ios-glyphs/30/sent.png" />
-</button>
+      <input id="msgInput" placeholder="Type a message…" />
+      <button id="sendMsg">➤</button>
     </div>
   </div>
 
