@@ -137,13 +137,15 @@ function loadRecent(uid){
       const lastSeenTs = c[`lastSeen_${uid}`];
       const lastSeen = lastSeenTs?.toMillis?.() || null;
 
-      // ✅ FINAL CORRECT UNREAD LOGIC
+     
+      const lastSender = c.lastMessageSender || "unknown";
+
       const unread =
-        c.lastMessageSender &&
-        c.lastMessageSender !== uid &&
-        (
-          !lastSeen || updatedAt > lastSeen
-        );
+  lastSender !== uid &&
+  (
+    !lastSeen || updatedAt > lastSeen
+  );
+
 
       recent.innerHTML += `
         <div class="user-row" data-uid="${otherUid}">
