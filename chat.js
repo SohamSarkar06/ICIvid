@@ -69,6 +69,12 @@ onAuthStateChanged(auth, async (user) => {
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
   });
 
+  // ✅ MARK CHAT AS READ (WHATSAPP-STYLE)
+  await updateDoc(chatRef, {
+    [`lastSeen_${user.uid}`]: serverTimestamp()
+  });
+});
+
   // ================= SEND MESSAGE (TIMESTAMP STORED) =================
   sendBtn.onclick = async () => {
     if (!msgInput.value.trim()) return;
