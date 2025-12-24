@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chat • ICIVID</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="chat-container">
+
+  <!-- HEADER -->
+  <div class="chat-header">
+    <button onclick="history.back()">⬅</button>
+    <h3 id="chatUser">User</h3>
+    <button id="callBtn">📞</button>
+  </div>
+
+  <!-- MESSAGES -->
+  <div id="chatMessages" class="chat-messages"></div>
+
+  <!-- INPUT -->
+  <div class="chat-input">
+    <input id="msgInput" placeholder="Type a message…" />
+    <button id="sendBtn">➤</button>
+  </div>
+
+</div>
+
+<script type="module" src="chat.js"></script>
+</body>
+</html>
