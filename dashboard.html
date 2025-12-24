@@ -8,46 +8,35 @@
 </head>
 <body>
 
-<div class="dashboard">
+<div class="auth-card">
 
-  <!-- LEFT SIDEBAR -->
-  <aside class="sidebar">
-    <h2>ICIVID</h2>
-    <p id="welcomeUser"></p>
+  <div class="logo">
+    <img src="assets/logo.svg" alt="ICIVID">
+  </div>
 
+  <h3 id="welcomeUser" style="text-align:center;"></h3>
+
+  <div class="dashboard-actions">
+    <button onclick="location.href='chat-search.html'">💬 Chats</button>
+    <button onclick="location.href='history.html'">📜 Call History</button>
     <button id="logoutBtn" class="secondary">Logout</button>
+  </div>
 
-    <h3>Search Users</h3>
-    <input id="searchUser" placeholder="Search username">
-    <div id="results"></div>
-  </aside>
-
-  <!-- MAIN CONTENT -->
-  <main class="main">
-
-    <!-- CHAT LIST -->
-    <section class="panel">
-      <h3>Chats</h3>
-      <div id="chatList"></div>
-    </section>
-
-    <!-- CALL HISTORY -->
-    <section class="panel">
-      <h3>Call History</h3>
-      <div id="callHistory"></div>
-    </section>
-
-  </main>
+  <h3>Search Users</h3>
+  <input id="searchUser" placeholder="Search by username">
+  <div id="results"></div>
 
 </div>
 
-<!-- INCOMING CALL MODAL -->
+<!-- Incoming Call -->
 <div id="incomingCall" class="modal hidden">
   <div class="call-popup-card">
     <h3>📞 Incoming Call</h3>
-    <p id="callerName"></p>
-    <button id="accept" class="primary">Accept</button>
-    <button id="decline" class="secondary">Decline</button>
+    <p id="callerName">Someone is calling you</p>
+    <div class="modal-actions">
+      <button id="accept" class="primary">Accept</button>
+      <button id="decline" class="secondary">Decline</button>
+    </div>
   </div>
 </div>
 
