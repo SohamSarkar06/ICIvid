@@ -342,17 +342,4 @@ video#remoteVideo {
   opacity: 0.6;
 }
 
-.chat-input {
-  display: flex;
-  padding: 10px;
-  background: white;
-}
 
-.chat-input input {
-  flex: 1;
-  padding: 8px;
-}
-
-.chat-input button {
-  margin-left: 8px;
-}
