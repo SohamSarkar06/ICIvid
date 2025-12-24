@@ -18,14 +18,15 @@
       You are in call with <span id="otherUserName"></span>
     </div>
 
-   <video
-  id="remoteVideo"
-  autoplay
-  playsinline
-  muted
-></video>
+    <!-- REMOTE VIDEO (muted is correct) -->
+    <video
+      id="remoteVideo"
+      autoplay
+      playsinline
+      muted>
+    </video>
 
-
+    <!-- LOCAL VIDEO -->
     <video
       id="localVideo"
       autoplay
@@ -33,6 +34,13 @@
       playsinline
       class="local-video">
     </video>
+
+    <!-- 🔊 REMOTE AUDIO (CRITICAL FOR AUDIO RELIABILITY) -->
+    <audio
+      id="remoteAudio"
+      autoplay
+      playsinline>
+    </audio>
 
     <div class="video-controls">
       <button id="muteBtn">🎤</button>
