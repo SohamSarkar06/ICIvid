@@ -5,7 +5,20 @@
   <link rel="stylesheet" href="css/style.css">
 
   <style>
-    /* ===== Search Result Styling ===== */
+    .user-row {
+      padding: 10px;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background 0.25s ease, transform 0.15s ease;
+    }
+
+    .user-row:hover {<!DOCTYPE html>
+<html>
+<head>
+  <title>Chats • ICIVID</title>
+  <link rel="stylesheet" href="css/style.css">
+
+  <style>
     .user-row {
       padding: 10px;
       cursor: pointer;
@@ -17,11 +30,15 @@
       background: #0A2526;
     }
 
-    /* Selected user animation */
     .user-row.selected {
-      background: #dbeafe; /* light blue */
+      background: #dbeafe;
       transform: scale(1.02);
       box-shadow: 0 0 0 2px rgba(59,130,246,0.3);
+    }
+
+    .last-msg {
+      font-size: 12px;
+      opacity: 0.6;
     }
   </style>
 </head>
@@ -33,7 +50,38 @@
 
   <input id="searchUser" placeholder="Search user">
   <div id="results"></div>
+  <div id="recentChats"></div>
 
+  <button onclick="history.back()">⬅ Back</button>
+</div>
+
+<script type="module" src="chat-search.js"></script>
+</body>
+</html>
+
+      background: #0A2526;
+    }
+
+    .user-row.selected {
+      background: #dbeafe;
+      transform: scale(1.02);
+      box-shadow: 0 0 0 2px rgba(59,130,246,0.3);
+    }
+
+    .last-msg {
+      font-size: 12px;
+      opacity: 0.6;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="auth-card">
+  <h3>💬 Chats</h3>
+
+  <input id="searchUser" placeholder="Search user">
+  <div id="results"></div>
   <div id="recentChats"></div>
 
   <button onclick="history.back()">⬅ Back</button>
