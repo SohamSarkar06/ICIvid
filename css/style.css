@@ -297,18 +297,59 @@ video#remoteVideo {
   background: #f5f5f5;
 }
 .chat-container {
+  height: 100vh;
+  width: 100vw;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  background: #020617;
 }
 
-.chat-header {
+/* ================= HEADER ================= */
+.chat-user {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px;
-  background: #111;
-  color: white;
+}
+.chat-username {
+  color: #e5e7eb;
+  font-weight: 600;
+  font-size: 15px;
+}
+.call-btn {
+  background: #22c55e;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  background: #1e293b;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+}
+
+.chat-header {
+  height: 60px;
+  background: linear-gradient(90deg, #0f172a, #020617);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid #1e293b;
+}
+.chat-page {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  background: #0f172a;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .chat-messages {
@@ -343,3 +384,46 @@ video#remoteVideo {
 }
 
 
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+}
+
+.hidden {
+  display: none;
+}
+
+.call-popup-card {
+  background: #020617;
+  padding: 20px;
+  border-radius: 14px;
+  text-align: center;
+  width: 280px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.primary {
+  background: #22c55e;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.secondary {
+  background: #ef4444;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
