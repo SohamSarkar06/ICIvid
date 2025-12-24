@@ -33,9 +33,11 @@ const db = getFirestore(app);
 const localVideo  = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 
-// 🔊 NEW (audio only)
+// 🔊 Dedicated remote audio element (REQUIRED)
 const remoteAudio = document.createElement("audio");
 remoteAudio.autoplay = true;
+remoteAudio.playsInline = true;
+remoteAudio.volume = 1.0;
 document.body.appendChild(remoteAudio);
 
 const muteBtn   = document.getElementById("muteBtn");
@@ -111,10 +113,16 @@ onAuthStateChanged(auth, async (user) => {
 /* ================= MEDIA ================= */
 
 async function initMedia() {
+  // 🔊 Explicit audio constraints (CRITICAL)
   localStream = await navigator.mediaDevices.getUserMedia({
     video: true,
-    audio: true
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true
+    }
   });
+
   localVideo.srcObject = localStream;
 }
 
@@ -141,15 +149,17 @@ async function initPeer(isCaller) {
       remoteVideo.play().catch(() => {});
     }
 
-    // 🔊 AUDIO (FIX)
+    // 🔊 AUDIO (FINAL FIX)
     if (event.track.kind === "audio") {
-      let aStream = remoteAudio.srcObject;
-      if (!aStream) {
-        aStream = new MediaStream();
-        remoteAudio.srcObject = aStream;
-      }
-      aStream.addTrack(event.track);
-      remoteAudio.play().catch(() => {});
+      const audioStream = new MediaStream([event.track]);
+      remoteAudio.srcObject = audioStream;
+
+      remoteAudio.muted = false;
+      remoteAudio.volume = 1.0;
+
+      remoteAudio.play()
+        .then(() => console.log("🔊 Remote audio playing"))
+        .catch(err => console.warn("Audio play blocked:", err));
     }
   };
 
@@ -275,8 +285,10 @@ endBtn.onclick = async () => {
   window.close();
 };
 
-// 🔓 Autoplay unlock (audio)
+/* ================= AUTOPLAY UNLOCK ================= */
+
 document.body.addEventListener("click", () => {
   remoteAudio.muted = false;
+  remoteAudio.volume = 1.0;
   remoteAudio.play().catch(() => {});
 }, { once: true });
