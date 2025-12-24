@@ -38,43 +38,9 @@ const chatRef = doc(db, "chats", chatId);
 const messagesRef = collection(chatRef, "messages");
 
 // ================= AUTH =================
-onAuthStateChanged(auth, async (user) => {
-  if (!user) return location.href = "index.html";
-
-  // Show chat user
-  const uSnap = await getDoc(doc(db, "users", otherUid));
-  if (uSnap.exists()) chatUser.textContent = uSnap.data().username;
-
-  // ================= LOAD MESSAGES (WITH TIMESTAMP) =================
-  const q = query(messagesRef, orderBy("createdAt"));
-  onSnapshot(q, snap => {
-    messagesDiv.innerHTML = "";
-    snap.forEach(d => {
-      const m = d.data();
-
-      const time = m.createdAt?.toDate
-        ? m.createdAt.toDate().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit"
-          })
-        : "";
-
-      messagesDiv.innerHTML += `
-        <div class="message ${m.sender === user.uid ? "me" : "other"}">
-          <div class="text">${m.text}</div>
-          <div class="time">${time}</div>
-        </div>
-      `;
-    });
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-  });
-
-  // ✅ MARK CHAT AS READ (WHATSAPP-STYLE)
-  await updateDoc(chatRef, {
-    [`lastSeen_${user.uid}`]: serverTimestamp()
-  });
-});
-
+onAuthStateChanged(auth, async (user) => { if (!user) return location.href = "index.html"; // Show chat user 
+                                          const uSnap = await getDoc(doc(db, "users", otherUid)); if (uSnap.exists()) chatUser.textContent = uSnap.data().username; // ================= LOAD MESSAGES (WITH TIMESTAMP) ================= 
+                                          const q = query(messagesRef, orderBy("createdAt")); onSnapshot(q, snap => { messagesDiv.innerHTML = ""; snap.forEach(d => { const m = d.data(); const time = m.createdAt?.toDate ? m.createdAt.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""; messagesDiv.innerHTML += <div class="message ${m.sender === user.uid ? "me" : "other"}"> <div class="text">${m.text}</div> <div class="time">${time}</div> </div> ; }); messagesDiv.scrollTop = messagesDiv.scrollHeight; });
   // ================= SEND MESSAGE (TIMESTAMP STORED) =================
   sendBtn.onclick = async () => {
     if (!msgInput.value.trim()) return;
