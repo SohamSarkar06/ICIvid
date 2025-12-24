@@ -427,19 +427,3 @@ video#remoteVideo {
   border-radius: 8px;
   cursor: pointer;
 }
-.user-row {
-  padding: 10px;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: background 0.25s ease, transform 0.15s ease;
-}
-
-.user-row:hover {
-  background: #0A2526;
-}
-
-.user-row.selected {
-  background: #dbeafe; /* light blue */
-  transform: scale(1.02);
-  box-shadow: 0 0 0 2px rgba(59,130,246,0.3);
-}
