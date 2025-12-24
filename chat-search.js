@@ -9,7 +9,6 @@ import {
   getDoc,
   query,
   where,
-  orderBy,
   onSnapshot,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -67,11 +66,11 @@ input.oninput = async () => {
   });
 };
 
-// ================= CLICK HANDLER (SHARED) =================
-function handleUserClick(container){
+// ================= CLICK HANDLER =================
+function bindClick(container){
   container.addEventListener("click", e=>{
     const row = e.target.closest(".user-row");
-    if (!row) return;
+    if(!row) return;
 
     document.querySelectorAll(".user-row.selected")
       .forEach(el=>el.classList.remove("selected"));
@@ -80,15 +79,15 @@ function handleUserClick(container){
 
     setTimeout(()=>{
       openChat(row.dataset.uid);
-    },180);
+    },150);
   });
 }
 
-handleUserClick(results);
-handleUserClick(recent);
+bindClick(results);
+bindClick(recent);
 
 // ================= OPEN CHAT =================
-window.openChat = async (other) => {
+async function openChat(other){
   const id = chatId(auth.currentUser.uid, other);
   const ref = doc(db,"chats",id);
 
@@ -102,35 +101,36 @@ window.openChat = async (other) => {
   }
 
   location.href=`chat.html?chat=${id}&user=${other}`;
-};
+}
 
-// ================= RECENT CHATS =================
+// ================= RECENT CHATS (FIXED) =================
 function loadRecent(uid){
   const q = query(
     collection(db,"chats"),
-    where("users","array-contains",uid),
-    orderBy("updatedAt","desc")
+    where("users","array-contains",uid)
   );
 
   onSnapshot(q, async snap=>{
     recent.innerHTML = "";
 
-    if (snap.empty) {
+    if(snap.empty){
       recent.innerHTML = `<p style="opacity:.6">No recent chats</p>`;
       return;
     }
 
     for(const d of snap.docs){
-      const c = d.data();
-      const other = c.users.find(u=>u!==uid);
+      const data = d.data();
+      const otherUid = data.users.find(u=>u!==uid);
 
-      const uSnap = await getDoc(doc(db,"users",other));
-      const name = uSnap.exists()?uSnap.data().username:"User";
+      const uSnap = await getDoc(doc(db,"users",otherUid));
+      const name = uSnap.exists()
+        ? uSnap.data().username
+        : "User";
 
       recent.innerHTML += `
-        <div class="user-row" data-uid="${other}">
-          <strong>${name}</strong>
-          <div class="last-msg">${c.lastMessage || "Start chatting"}</div>
+        <div class="user-row" data-uid="${otherUid}">
+          <strong>${name}</strong><br>
+          <small style="opacity:.6">${data.lastMessage || "Start chatting"}</small>
         </div>`;
     }
   });
