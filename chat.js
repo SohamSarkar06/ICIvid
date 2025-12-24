@@ -45,22 +45,31 @@ onAuthStateChanged(auth, async (user) => {
   const uSnap = await getDoc(doc(db, "users", otherUid));
   if (uSnap.exists()) chatUser.textContent = uSnap.data().username;
 
-  // ================= LOAD MESSAGES =================
+  // ================= LOAD MESSAGES (WITH TIMESTAMP) =================
   const q = query(messagesRef, orderBy("createdAt"));
   onSnapshot(q, snap => {
     messagesDiv.innerHTML = "";
     snap.forEach(d => {
       const m = d.data();
+
+      const time = m.createdAt?.toDate
+        ? m.createdAt.toDate().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit"
+          })
+        : "";
+
       messagesDiv.innerHTML += `
         <div class="message ${m.sender === user.uid ? "me" : "other"}">
-          ${m.text}
+          <div class="text">${m.text}</div>
+          <div class="time">${time}</div>
         </div>
       `;
     });
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
   });
 
-  // ================= SEND MESSAGE =================
+  // ================= SEND MESSAGE (TIMESTAMP STORED) =================
   sendBtn.onclick = async () => {
     if (!msgInput.value.trim()) return;
 
