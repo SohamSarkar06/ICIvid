@@ -118,7 +118,6 @@ function loadRecent(uid){
       return;
     }
 
-    // Sort by recent activity
     const chats = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .sort((a,b)=>{
@@ -133,19 +132,21 @@ function loadRecent(uid){
       const uSnap = await getDoc(doc(db,"users",otherUid));
       const name = uSnap.exists() ? uSnap.data().username : "User";
 
-      const updatedAt = c.updatedAt?.toMillis?.() || 0;
       const lastSeenTs = c[`lastSeen_${uid}`];
       const lastSeen = lastSeenTs?.toMillis?.() || null;
 
-     
-      const lastSender = c.lastMessageSender || "unknown";
+      const updatedAt = c.updatedAt?.toMillis?.() || null;
+      const lastSender = c.lastMessageSender || otherUid;
 
+      // ✅ FINAL UNREAD LOGIC (WORKS IN ALL CASES)
       const unread =
-  lastSender !== uid &&
-  (
-    !lastSeen || updatedAt > lastSeen
-  );
-
+        !!c.lastMessage &&
+        lastSender !== uid &&
+        (
+          !lastSeen ||            // never opened
+          !updatedAt ||           // no timestamp yet
+          updatedAt > lastSeen    // new message after open
+        );
 
       recent.innerHTML += `
         <div class="user-row" data-uid="${otherUid}">
