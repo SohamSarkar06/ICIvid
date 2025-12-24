@@ -33,6 +33,11 @@ const db = getFirestore(app);
 const localVideo  = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 
+// 🔊 NEW (audio only)
+const remoteAudio = document.createElement("audio");
+remoteAudio.autoplay = true;
+document.body.appendChild(remoteAudio);
+
 const muteBtn   = document.getElementById("muteBtn");
 const videoBtn  = document.getElementById("videoBtn");
 const screenBtn = document.getElementById("screenBtn");
@@ -59,7 +64,7 @@ const offerCandidates  = collection(callRef, "offerCandidates");
 const answerCandidates = collection(callRef, "answerCandidates");
 const messagesRef      = collection(callRef, "messages");
 
-/* ================= ICE CONFIG (TURN) ================= */
+/* ================= ICE CONFIG ================= */
 
 const rtcConfig = {
   iceServers: [
@@ -83,7 +88,6 @@ onAuthStateChanged(auth, async (user) => {
   const req = reqSnap.data();
   const isCaller = req.from === user.uid;
 
-  // Show "You are in call with X"
   const otherUid = isCaller ? req.to : req.from;
   const otherUserSnap = await getDoc(doc(db, "users", otherUid));
   if (otherUserSnap.exists()) {
@@ -95,7 +99,6 @@ onAuthStateChanged(auth, async (user) => {
   await initPeer(isCaller);
   initChat(user.uid);
 
-  // Call end listener
   onSnapshot(callRef, snap => {
     if (snap.data()?.ended) {
       alert("Call ended by the other user");
@@ -120,31 +123,37 @@ async function initMedia() {
 async function initPeer(isCaller) {
   pc = new RTCPeerConnection(rtcConfig);
 
-  // Send local tracks
   localStream.getTracks().forEach(track =>
     pc.addTrack(track, localStream)
   );
 
-  // 🔥 BULLETPROOF REMOTE VIDEO HANDLING
   pc.ontrack = (event) => {
-    console.log("🎥 Remote track received:", event.track.kind);
+    console.log("🎧 Remote track:", event.track.kind);
 
-    let stream = remoteVideo.srcObject;
-    if (!stream) {
-      stream = new MediaStream();
-      remoteVideo.srcObject = stream;
+    // 🎥 VIDEO (UNCHANGED)
+    if (event.track.kind === "video") {
+      let vStream = remoteVideo.srcObject;
+      if (!vStream) {
+        vStream = new MediaStream();
+        remoteVideo.srcObject = vStream;
+      }
+      vStream.addTrack(event.track);
+      remoteVideo.play().catch(() => {});
     }
 
-    stream.addTrack(event.track);
-
-    remoteVideo
-      .play()
-      .then(() => console.log("✅ Remote video playing"))
-      .catch(() => {});
+    // 🔊 AUDIO (FIX)
+    if (event.track.kind === "audio") {
+      let aStream = remoteAudio.srcObject;
+      if (!aStream) {
+        aStream = new MediaStream();
+        remoteAudio.srcObject = aStream;
+      }
+      aStream.addTrack(event.track);
+      remoteAudio.play().catch(() => {});
+    }
   };
 
   if (isCaller) {
-    // ===== CALLER =====
     pc.onicecandidate = e => {
       if (e.candidate) addDoc(offerCandidates, e.candidate.toJSON());
     };
@@ -173,18 +182,13 @@ async function initPeer(isCaller) {
     });
 
   } else {
-    // ===== RECEIVER (FIXED) =====
     pc.onicecandidate = e => {
       if (e.candidate) addDoc(answerCandidates, e.candidate.toJSON());
     };
 
     onSnapshot(callRef, async snap => {
       const data = snap.data();
-
-      // Wait for offer ONCE
       if (!data?.offer || pc.currentRemoteDescription) return;
-
-      console.log("📨 Offer received → creating answer");
 
       await pc.setRemoteDescription(
         new RTCSessionDescription(data.offer)
@@ -227,7 +231,6 @@ function initChat(uid) {
 
   onSnapshot(q, snap => {
     messages.innerHTML = "";
-
     snap.forEach(doc => {
       const m = doc.data();
       const time = m.createdAt?.toDate
@@ -244,7 +247,6 @@ function initChat(uid) {
         </div>
       `;
     });
-
     messages.scrollTop = messages.scrollHeight;
   });
 }
@@ -273,10 +275,8 @@ endBtn.onclick = async () => {
   window.close();
 };
 
-// Autoplay fallback
+// 🔓 Autoplay unlock (audio)
 document.body.addEventListener("click", () => {
-  if (remoteVideo.paused) {
-    remoteVideo.muted = false;
-    remoteVideo.play().catch(() => {});
-  }
+  remoteAudio.muted = false;
+  remoteAudio.play().catch(() => {});
 }, { once: true });
