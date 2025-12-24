@@ -32,6 +32,7 @@ const db = getFirestore(app);
 
 const callStartTime = Date.now();
 let otherUserId = null;
+let historyWritten = false; // 🔥 ADDED (CRITICAL)
 
 /* ================= DOM ================= */
 
@@ -89,7 +90,7 @@ onAuthStateChanged(auth, async (user) => {
   const req = reqSnap.data();
   const isCaller = req.from === user.uid;
 
-  // 🔥 SET OTHER USER (CRITICAL FIX)
+  // 🔥 SET OTHER USER
   const otherUid = isCaller ? req.to : req.from;
   otherUserId = otherUid;
 
@@ -103,8 +104,19 @@ onAuthStateChanged(auth, async (user) => {
   await initPeer(isCaller);
   initChat(user.uid);
 
-  onSnapshot(callRef, snap => {
-    if (snap.data()?.ended) {
+  // 🔥 HANDLE REMOTE END (HISTORY SAFE)
+  onSnapshot(callRef, async snap => {
+    if (snap.data()?.ended && !historyWritten) {
+      historyWritten = true;
+
+      const duration = Math.floor((Date.now() - callStartTime) / 1000);
+
+      await addDoc(collection(db, "callHistory"), {
+        participants: [auth.currentUser.uid, otherUserId],
+        duration,
+        endedAt: serverTimestamp()
+      });
+
       alert("Call ended by the other user");
       pc?.close();
       window.close();
@@ -271,9 +283,12 @@ screenBtn.onclick = async () => {
   sender.replaceTrack(screenStream.getVideoTracks()[0]);
 };
 
-/* ================= END CALL (HISTORY FIX) ================= */
+/* ================= END CALL (HISTORY SAFE) ================= */
 
 endBtn.onclick = async () => {
+  if (historyWritten) return;
+  historyWritten = true;
+
   const duration = Math.floor((Date.now() - callStartTime) / 1000);
 
   await addDoc(collection(db, "callHistory"), {
